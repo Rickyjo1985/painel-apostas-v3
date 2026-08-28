@@ -3,129 +3,91 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Painel de Apostas Privado</title>
-    <style>
-        :root {
-            --primary: #0070f3;
-            --success: #0070f3;
-            --danger: #ff4d4d;
-            --dark: #1e1e24;
-            --light: #f4f6f9;
-        }
-        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: var(--light); margin: 0; padding: 0; display: flex; justify-content: center; align-items: center; min-height: 100vh; }
-        .box { background: white; padding: 30px; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.08); width: 100%; max-width: 400px; text-align: center; }
-        .dashboard { max-width: 1000px; width: 90%; margin: 40px auto; display: none; background: white; padding: 30px; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.08); }
-        
-        /* Formulários e Botões */
-        input, select { width: 100%; padding: 10px; margin: 10px 0; border: 1px solid #ccc; border-radius: 6px; box-sizing: border-box; font-size: 15px; }
-        button { background-color: var(--primary); color: white; border: none; padding: 12px; border-radius: 6px; cursor: pointer; font-size: 16px; width: 100%; font-weight: bold; transition: 0.2s; }
-        button:hover { opacity: 0.9; }
-        .btn-logout { background-color: #666; width: auto; padding: 8px 15px; float: right; font-size: 14px; }
-        
-        /* Métricas */
-        .stats-container { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; margin: 20px 0; }
-        .stat-card { background: var(--light); padding: 15px; border-radius: 8px; text-align: left; border-left: 5px solid var(--primary); }
-        .stat-card.lucro { border-left-color: #2ec4b6; }
-        .stat-card h4 { margin: 0; color: #666; font-size: 14px; }
-        .stat-card p { margin: 5px 0 0 0; font-size: 22px; font-weight: bold; color: var(--dark); }
-        
-        /* Tabela */
-        .table-responsive { overflow-x: auto; margin-top: 25px; }
-        table { width: 100%; border-collapse: collapse; text-align: left; }
-        th, td { padding: 12px 15px; border-bottom: 1px solid #ddd; }
-        th { background-color: var(--dark); color: white; }
-        tr:hover { background-color: #f9f9f9; }
-        
-        /* Status Badges */
-        .badge { padding: 4px 8px; border-radius: 4px; font-size: 12px; font-weight: bold; }
-        .badge.ganha { background-color: #e2f9f3; color: #10b981; }
-        .badge.perdida { background-color: #ffebee; color: var(--danger); }
-        .badge.pendente { background-color: #fff8e1; color: #f59e0b; }
-        
-        .error { color: var(--danger); margin-top: 10px; font-size: 14px; }
-    </style>
+    <title>Painel de Apostas Dinâmico</title>
+    <!-- Ligação ao ficheiro de estilos separado -->
+    <link rel="stylesheet" href="style.css">
 </head>
 <body>
 
     <!-- 🔒 ECRÃ DE LOGIN -->
     <div id="login-box" class="box">
         <h2>🔒 Acesso Restrito</h2>
-        <p>Introduza a palavra-passe do seu painel de apostas.</p>
+        <p>Introduza a palavra-passe do seu painel técnico.</p>
         <input type="password" id="password" placeholder="Palavra-passe">
         <button onclick="verificarSenha()">Entrar no Painel</button>
         <p id="error-msg" class="error"></p>
     </div>
 
-    <!-- 📊 CONTEÚDO PRIVADO (PAINEL DE APOSTAS) -->
+    <!-- 📊 PAINEL DINÂMICO PRIVADO -->
     <div id="private-dashboard" class="dashboard">
-        <div style="display: flow-root; border-bottom: 2px solid var(--light); padding-bottom: 10px;">
-            <h2 style="margin: 0; float: left; color: var(--dark);">📈 Painel de Gestão de Banca</h2>
-            <button onclick="sair()" class="btn-logout">Sair</button>
+        <div style="border-bottom: 2px solid var(--light); padding-bottom: 15px; margin-bottom: 20px;">
+            <button onclick="sair()" class="btn-logout">Sair Seguro</button>
+            <h2 style="margin: 0; color: var(--dark);">📊 Gestor de Apostas</h2>
         </div>
 
-        <!-- Cartões de Resumo Técnico -->
         <div class="stats-container">
-            <div class="stat-card">
-                <h4>Banca Total Estipulada</h4>
-                <p>1.250,00 €</p>
+            <div class="stat-card" style="border-left-color: #a0aec0;">
+                <h4>Total Investido</h4>
+                <p id="stat-investido">0,00 €</p>
             </div>
-            <div class="stat-card lucro">
-                <h4>Lucro / Prejuízo Total</h4>
-                <p style="color: #10b981;">+ 342,50 €</p>
+            <div class="stat-card" style="border-left-color: var(--success);">
+                <h4>Lucro / Prejuízo</h4>
+                <p id="stat-lucro">0,00 €</p>
             </div>
             <div class="stat-card" style="border-left-color: #f59e0b;">
-                <h4>Apostas Ativas</h4>
-                <p>2 Pendentes</p>
+                <h4>Operações Ativas</h4>
+                <p id="stat-pendentes">0 Pendentes</p>
             </div>
         </div>
 
-        <!-- Tabela de Dados Privada -->
-        <h3>📋 Registo de Operações Recentes</h3>
-        <div class="table-responsive">
-            <table>
-                <thead>
-                    <tr>
-                        <th>Data</th>
-                        <th>Evento / Mercado</th>
-                        <th>Investimento</th>
-                        <th>Odd</th>
-                        <th>Retorno Esperado</th>
-                        <th>Estado</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <tr>
-                        <td>29/08/2026</td>
-                        <td>Benfica vs Porto - Ambas Marcam</td>
-                        <td>50,00 €</td>
-                        <td>1.85</td>
-                        <td>92,50 €</td>
-                        <td><span class="badge ganha">Ganha</span></td>
-                    </tr>
-                    <tr>
-                        <td>29/08/2026</td>
-                        <td>Real Madrid vs Barcelona - Vitória Casa</td>
-                        <td>100,00 €</td>
-                        <td>2.10</td>
-                        <td>210,00 €</td>
-                        <td><span class="badge perdida">Perdida</span></td>
-                    </tr>
-                    <tr>
-                        <td>30/08/2026</td>
-                        <td>Sporting vs Braga - Mais de 2.5 Golos</td>
-                        <td>30,00 €</td>
-                        <td>1.70</td>
-                        <td>51,00 €</td>
-                        <td><span class="badge pendente">Pendente</span></td>
-                    </tr>
-                </tbody>
-            </table>
+        <div class="layout-grid">
+            <div class="form-section">
+                <h3 style="margin-top: 0; color: var(--dark);">📝 Registar Operação</h3>
+                <form id="bet-form" onsubmit="adicionarAposta(event)">
+                    <label>Evento / Mercado</label>
+                    <input type="text" id="form-evento" placeholder="Ex: Benfica vs Porto" required>
+
+                    <label>Investimento (€)</label>
+                    <input type="number" id="form-valor" step="0.01" placeholder="Ex: 20.00" required>
+
+                    <label>Odd (Cotação)</label>
+                    <input type="number" id="form-odd" step="0.01" placeholder="Ex: 1.85" required>
+
+                    <label>Estado Inicial</label>
+                    <select id="form-estado">
+                        <option value="pendente">Pendente</option>
+                        <option value="ganha">Ganha</option>
+                        <option value="perdida">Perdida</option>
+                    </select>
+
+                    <button type="submit">Adicionar</button>
+                </form>
+            </div>
+
+            <div>
+                <h3 style="margin-top: 0; color: var(--dark);">📋 Histórico</h3>
+                <div class="table-responsive">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Evento</th>
+                                <th>Valor</th>
+                                <th>Odd</th>
+                                <th>Retorno</th>
+                                <th>Estado</th>
+                                <th></th>
+                            </tr>
+                        </thead>
+                        <tbody id="table-body"></tbody>
+                    </table>
+                </div>
+            </div>
         </div>
     </div>
 
     <script>
-        // Palavra-passe de acesso ao site
         const PALAVRA_PASSE_CORRETA = "SenhaSegura123";
+        let apostas = JSON.parse(localStorage.getItem('minhas_apostas')) || [];
 
         function verificarSenha() {
             const input = document.getElementById("password").value;
@@ -134,11 +96,64 @@
             if (input === PALAVRA_PASSE_CORRETA) {
                 document.getElementById("login-box").style.display = "none";
                 document.getElementById("private-dashboard").style.display = "block";
-                document.body.style.alignItems = "flex-start"; // Melhora scroll da tabela
-                erro.innerText = "";
+                document.body.style.alignItems = "flex-start";
+                atualizarPainel();
             } else {
-                erro.innerText = "Palavra-passe incorreta. Acesso negado.";
+                erro.innerText = "Palavra-passe incorreta.";
             }
+        }
+
+        function adicionarAposta(event) {
+            event.preventDefault();
+            const novaAposta = {
+                id: Date.now(),
+                evento: document.getElementById("form-evento").value,
+                valor: parseFloat(document.getElementById("form-valor").value),
+                odd: parseFloat(document.getElementById("form-odd").value),
+                estado: document.getElementById("form-estado").value
+            };
+            apostas.push(novaAposta);
+            localStorage.setItem('minhas_apostas', JSON.stringify(apostas));
+            document.getElementById("bet-form").reset();
+            atualizarPainel();
+        }
+
+        function eliminarAposta(id) {
+            apostas = apostas.filter(a => a.id !== id);
+            localStorage.setItem('minhas_apostas', JSON.stringify(apostas));
+            atualizarPainel();
+        }
+
+        function atualizarPainel() {
+            const tbody = document.getElementById("table-body");
+            tbody.innerHTML = "";
+            let totalInvestido = 0, lucroLiquido = 0, pendentes = 0;
+
+            apostas.forEach(a => {
+                totalInvestido += a.valor;
+                let retornoBruto = a.valor * a.odd;
+                
+                if (a.estado === 'ganha') lucroLiquido += (retornoBruto - a.valor);
+                else if (a.estado === 'perdida') lucroLiquido -= a.valor;
+                else pendentes++;
+
+                const tr = document.createElement("tr");
+                tr.innerHTML = `
+                    <td><strong>${a.evento}</strong></td>
+                    <td>${a.valor.toFixed(2)} €</td>
+                    <td>${a.odd.toFixed(2)}</td>
+                    <td>${retornoBruto.toFixed(2)} €</td>
+                    <td><span class="badge ${a.estado}">${a.estado}</span></td>
+                    <td><button class="btn-delete" onclick="eliminarAposta(${a.id})">×</button></td>
+                `;
+                tbody.appendChild(tr);
+            });
+
+            document.getElementById("stat-investido").innerText = `${totalInvestido.toFixed(2)} €`;
+            const cardLucro = document.getElementById("stat-lucro");
+            cardLucro.innerText = `${lucroLiquido >= 0 ? '+' : ''}${lucroLiquido.toFixed(2)} €`;
+            cardLucro.style.color = lucroLiquido >= 0 ? "var(--success)" : "var(--danger)";
+            document.getElementById("stat-pendentes").innerText = `${pendentes} Ativa(s)`;
         }
 
         function sair() {
