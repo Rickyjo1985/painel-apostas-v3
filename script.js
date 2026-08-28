@@ -1,4 +1,4 @@
-const PALAVRA_PASSE_CORRETA = "Rickyjo1985";
+const PALAVRA_PASSE_CORRETA = "SenhaSegura123";
 let apostas = JSON.parse(localStorage.getItem('minhas_apostas_multibanca')) || [];
 let casaFiltroAtual = "todas";
 
