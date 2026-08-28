@@ -111,6 +111,42 @@ button:hover { opacity: 0.9; }
 .stat-card h4 { margin: 0; color: #666; font-size: 13px; text-transform: uppercase; }
 .stat-card p { margin: 5px 0 0 0; font-size: 22px; font-weight: bold; color: var(--dark); }
 
+/* --- Novo Gráfico de Progresso Horizontal --- */
+.chart-container {
+    background: var(--light);
+    padding: 15px;
+    border-radius: 8px;
+    margin-bottom: 20px;
+    box-sizing: border-box;
+}
+
+.progress-bar-bg {
+    background: #e2e8f0;
+    border-radius: 10px;
+    height: 24px;
+    width: 100%;
+    overflow: hidden;
+    position: relative;
+    margin-top: 10px;
+}
+
+.progress-bar-fill {
+    background: var(--success);
+    height: 100%;
+    width: 0%;
+    transition: width 0.5s ease;
+}
+
+.progress-text {
+    position: absolute;
+    width: 100%;
+    text-align: center;
+    top: 2px;
+    font-size: 13px;
+    font-weight: bold;
+    color: var(--dark);
+}
+
 .table-responsive { 
     overflow-x: auto; 
     background: white; 
@@ -122,10 +158,15 @@ table { width: 100%; border-collapse: collapse; text-align: left; font-size: 14p
 th, td { padding: 12px; border-bottom: 1px solid #eee; }
 th { background-color: var(--dark); color: white; }
 
-.badge { padding: 4px 8px; border-radius: 4px; font-size: 11px; font-weight: bold; text-transform: uppercase; }
-.badge.ganha { background-color: #e2f9f3; color: var(--success); }
-.badge.perdida { background-color: #ffebee; color: var(--danger); }
-.badge.pendente { background-color: #fff8e1; color: #f59e0b; }
+/* --- Novo Seletor Inline para a Tabela --- */
+select.table-select {
+    width: auto;
+    padding: 4px 8px;
+    margin: 0;
+    font-size: 13px;
+    display: inline-block;
+    cursor: pointer;
+}
 
 .btn-delete { background: none; border: none; color: var(--danger); cursor: pointer; font-weight: bold; font-size: 16px; padding: 0 5px; }
 .error { color: var(--danger); margin-top: 10px; font-size: 14px; }
