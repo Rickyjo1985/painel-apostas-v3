@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Painel de Apostas Dinâmico com Gráficos</title>
+    <title>Painel Multibancas</title>
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -11,7 +11,7 @@
     <!-- 🔒 ECRÃ DE LOGIN -->
     <div id="login-box" class="box">
         <h2>🔒 Acesso Restrito</h2>
-        <p>Introduza a palavra-passe do seu painel técnico.</p>
+        <p>Introduza a palavra-passe do seu painel multibancas.</p>
         <input type="password" id="password" placeholder="Palavra-passe">
         <button onclick="verificarSenha()">Entrar no Painel</button>
         <p id="error-msg" class="error"></p>
@@ -21,12 +21,18 @@
     <div id="private-dashboard" class="dashboard">
         <div style="border-bottom: 2px solid var(--light); padding-bottom: 15px; margin-bottom: 20px;">
             <button onclick="sair()" class="btn-logout">Sair Seguro</button>
-            <h2 style="margin: 0; color: var(--dark);">📊 Gestor de Apostas Profissional</h2>
+            <h2 style="margin: 0; color: var(--dark);">📊 Gestor de Apostas Multibancas</h2>
         </div>
 
-        <!-- Barra Dinâmica de Metas -->
+        <div class="house-filters">
+            <button class="btn-filter active" id="filter-todas" onclick="filtrarPorCasa('todas')">Todas as Bancas</button>
+            <button class="btn-filter" id="filter-betclic" onclick="filtrarPorCasa('Betclic')">Betclic</button>
+            <button class="btn-filter" id="filter-betano" onclick="filtrarPorCasa('Betano')">Betano</button>
+            <button class="btn-filter" id="filter-placard" onclick="filtrarPorCasa('Placard')">Placard</button>
+        </div>
+
         <div class="chart-container">
-            <h4 style="margin: 0 0 5px 0; color: #666; font-size: 12px; text-transform: uppercase;">Gráfico de Lucro Alvo (Meta: +500€)</h4>
+            <h4 style="margin: 0 0 5px 0; color: #666; font-size: 12px; text-transform: uppercase;">Progresso da Banca Selecionada (Meta Alvo: +500€)</h4>
             <div class="progress-bar-bg">
                 <div id="chart-fill" class="progress-bar-fill"></div>
                 <div id="chart-text" class="progress-text">0% (0.00 €)</div>
@@ -35,15 +41,15 @@
 
         <div class="stats-container">
             <div class="stat-card" style="border-left-color: #a0aec0;">
-                <h4>Total Investido</h4>
+                <h4>Investimento Filtro</h4>
                 <p id="stat-investido">0,00 €</p>
             </div>
             <div class="stat-card" style="border-left-color: var(--success);">
-                <h4>Lucro / Prejuízo</h4>
+                <h4>Lucro Filtro</h4>
                 <p id="stat-lucro">0,00 €</p>
             </div>
             <div class="stat-card" style="border-left-color: #f59e0b;">
-                <h4>Operações Ativas</h4>
+                <h4>Ativas Filtro</h4>
                 <p id="stat-pendentes">0 Pendentes</p>
             </div>
         </div>
@@ -52,6 +58,13 @@
             <div class="form-section">
                 <h3 style="margin-top: 0; color: var(--dark);">📝 Registar Operação</h3>
                 <form id="bet-form" onsubmit="adicionarAposta(event)">
+                    <label>Casa de Apostas</label>
+                    <select id="form-casa">
+                        <option value="Betclic">Betclic</option>
+                        <option value="Betano">Betano</option>
+                        <option value="Placard">Placard</option>
+                    </select>
+
                     <label>Evento / Mercado</label>
                     <input type="text" id="form-evento" placeholder="Ex: Benfica vs Porto" required>
 
@@ -73,11 +86,12 @@
             </div>
 
             <div>
-                <h3 style="margin-top: 0; color: var(--dark);">📋 Histórico</h3>
+                <h3 style="margin-top: 0; color: var(--dark);">📋 Histórico de Operações</h3>
                 <div class="table-responsive">
                     <table>
                         <thead>
                             <tr>
+                                <th>Banca</th>
                                 <th>Evento</th>
                                 <th>Valor</th>
                                 <th>Odd</th>
@@ -93,112 +107,7 @@
         </div>
     </div>
 
-    <script>
-        const PALAVRA_PASSE_CORRETA = "SenhaSegura123";
-        let apostas = JSON.parse(localStorage.getItem('minhas_apostas')) || [];
-
-        function verificarSenha() {
-            const input = document.getElementById("password").value;
-            const erro = document.getElementById("error-msg");
-            
-            if (input === PALAVRA_PASSE_CORRETA) {
-                document.getElementById("login-box").style.display = "none";
-                document.getElementById("private-dashboard").style.display = "block";
-                document.body.style.alignItems = "flex-start";
-                atualizarPainel();
-            } else {
-                erro.innerText = "Palavra-passe incorreta.";
-            }
-        }
-
-        function adicionarAposta(event) {
-            event.preventDefault();
-            const novaAposta = {
-                id: Date.now(),
-                evento: document.getElementById("form-evento").value,
-                valor: parseFloat(document.getElementById("form-valor").value),
-                odd: parseFloat(document.getElementById("form-odd").value),
-                estado: document.getElementById("form-estado").value
-            };
-            apostas.push(novaAposta);
-            localStorage.setItem('minhas_apostas', JSON.stringify(apostas));
-            document.getElementById("bet-form").reset();
-            atualizarPainel();
-        }
-
-        // Função que altera o estado em tempo real sem recarregar a página
-        function mudarEstadoAposta(id, novoEstado) {
-            apostas = apostas.map(a => {
-                if (a.id === id) {
-                    a.estado = novoEstado;
-                }
-                return a;
-            });
-            localStorage.setItem('minhas_apostas', JSON.stringify(apostas));
-            atualizarPainel();
-        }
-
-        function eliminarAposta(id) {
-            apostas = apostas.filter(a => a.id !== id);
-            localStorage.setItem('minhas_apostas', JSON.stringify(apostas));
-            atualizarPainel();
-        }
-
-        function atualizarPainel() {
-            const tbody = document.getElementById("table-body");
-            tbody.innerHTML = "";
-            let totalInvestido = 0, lucroLiquido = 0, pendentes = 0;
-
-            apostas.forEach(a => {
-                totalInvestido += a.valor;
-                let retornoBruto = a.valor * a.odd;
-                
-                if (a.estado === 'ganha') lucroLiquido += (retornoBruto - a.valor);
-                else if (a.estado === 'perdida') lucroLiquido -= a.valor;
-                else pendentes++;
-
-                const tr = document.createElement("tr");
-                tr.innerHTML = `
-                    <td><strong>${a.evento}</strong></td>
-                    <td>${a.valor.toFixed(2)} €</td>
-                    <td>${a.odd.toFixed(2)}</td>
-                    <td>${retornoBruto.toFixed(2)} €</td>
-                    <td>
-                        <select class="table-select" onchange="mudarEstadoAposta(${a.id}, this.value)">
-                            <option value="pendente" ${a.estado === 'pendente' ? 'selected' : ''}>Pendente</option>
-                            <option value="ganha" ${a.estado === 'ganha' ? 'selected' : ''}>Ganha</option>
-                            <option value="perdida" ${a.estado === 'perdida' ? 'selected' : ''}>Perdida</option>
-                        </select>
-                    </td>
-                    <td><button class="btn-delete" onclick="eliminarAposta(${a.id})">×</button></td>
-                `;
-                tbody.appendChild(tr);
-            });
-
-            document.getElementById("stat-investido").innerText = `${totalInvestido.toFixed(2)} €`;
-            const cardLucro = document.getElementById("stat-lucro");
-            cardLucro.innerText = `${lucroLiquido >= 0 ? '+' : ''}${lucroLiquido.toFixed(2)} €`;
-            cardLucro.style.color = lucroLiquido >= 0 ? "var(--success)" : "var(--danger)";
-            document.getElementById("stat-pendentes").innerText = `${pendentes} Ativa(s)`;
-
-            // Atualização automática da Barra Gráfica de Progresso
-            const meta = 500;
-            let percentagem = (lucroLiquido / meta) * 100;
-            if (percentagem < 0) percentagem = 0;
-            if (percentagem > 100) percentagem = 100;
-            
-            const chartFill = document.getElementById("chart-fill");
-            chartFill.style.width = `${percentagem}%`;
-            chartFill.style.backgroundColor = lucroLiquido >= 0 ? "var(--success)" : "var(--danger)";
-            document.getElementById("chart-text").innerText = `${percentagem.toFixed(0)}% (${lucroLiquido.toFixed(2)} € / ${meta} €)`;
-        }
-
-        function sair() {
-            document.getElementById("password").value = "";
-            document.getElementById("login-box").style.display = "block";
-            document.getElementById("private-dashboard").style.display = "none";
-            document.body.style.alignItems = "center";
-        }
-    </script>
+    <!-- Vinculação do ficheiro lógico separado -->
+    <script src="script.js"></script>
 </body>
 </html>
