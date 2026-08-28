@@ -3,44 +3,128 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Área Privada</title>
+    <title>Painel de Apostas Privado</title>
     <style>
-        body { font-family: Arial, sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; background-color: #f4f4f9; }
-        .box { background: white; padding: 30px; border-radius: 8px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); text-align: center; max-width: 400px; width: 100%; }
-        input { width: 90%; padding: 10px; margin: 15px 0; border: 1px solid #ccc; border-radius: 4px; font-size: 16px; }
-        button { background-color: #0070f3; color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer; font-size: 16px; width: 96%; }
-        button:hover { background-color: #0051cb; }
-        .error { color: red; margin-top: 10px; font-size: 14px; }
-        .hidden { display: none; }
-        .content { text-align: left; }
+        :root {
+            --primary: #0070f3;
+            --success: #0070f3;
+            --danger: #ff4d4d;
+            --dark: #1e1e24;
+            --light: #f4f6f9;
+        }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: var(--light); margin: 0; padding: 0; display: flex; justify-content: center; align-items: center; min-height: 100vh; }
+        .box { background: white; padding: 30px; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.08); width: 100%; max-width: 400px; text-align: center; }
+        .dashboard { max-width: 1000px; width: 90%; margin: 40px auto; display: none; background: white; padding: 30px; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.08); }
+        
+        /* Formulários e Botões */
+        input, select { width: 100%; padding: 10px; margin: 10px 0; border: 1px solid #ccc; border-radius: 6px; box-sizing: border-box; font-size: 15px; }
+        button { background-color: var(--primary); color: white; border: none; padding: 12px; border-radius: 6px; cursor: pointer; font-size: 16px; width: 100%; font-weight: bold; transition: 0.2s; }
+        button:hover { opacity: 0.9; }
+        .btn-logout { background-color: #666; width: auto; padding: 8px 15px; float: right; font-size: 14px; }
+        
+        /* Métricas */
+        .stats-container { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; margin: 20px 0; }
+        .stat-card { background: var(--light); padding: 15px; border-radius: 8px; text-align: left; border-left: 5px solid var(--primary); }
+        .stat-card.lucro { border-left-color: #2ec4b6; }
+        .stat-card h4 { margin: 0; color: #666; font-size: 14px; }
+        .stat-card p { margin: 5px 0 0 0; font-size: 22px; font-weight: bold; color: var(--dark); }
+        
+        /* Tabela */
+        .table-responsive { overflow-x: auto; margin-top: 25px; }
+        table { width: 100%; border-collapse: collapse; text-align: left; }
+        th, td { padding: 12px 15px; border-bottom: 1px solid #ddd; }
+        th { background-color: var(--dark); color: white; }
+        tr:hover { background-color: #f9f9f9; }
+        
+        /* Status Badges */
+        .badge { padding: 4px 8px; border-radius: 4px; font-size: 12px; font-weight: bold; }
+        .badge.ganha { background-color: #e2f9f3; color: #10b981; }
+        .badge.perdida { background-color: #ffebee; color: var(--danger); }
+        .badge.pendente { background-color: #fff8e1; color: #f59e0b; }
+        
+        .error { color: var(--danger); margin-top: 10px; font-size: 14px; }
     </style>
 </head>
 <body>
 
-    <!-- Ecrã de Login -->
+    <!-- 🔒 ECRÃ DE LOGIN -->
     <div id="login-box" class="box">
         <h2>🔒 Acesso Restrito</h2>
-        <p>Introduza a palavra-passe para aceder ao painel.</p>
+        <p>Introduza a palavra-passe do seu painel de apostas.</p>
         <input type="password" id="password" placeholder="Palavra-passe">
-        <button onclick="verificarSenha()">Entrar</button>
+        <button onclick="verificarSenha()">Entrar no Painel</button>
         <p id="error-msg" class="error"></p>
     </div>
 
-    <!-- Conteúdo Privado (Escondido inicialmente) -->
-    <div id="private-content" class="box hidden content">
-        <h2>🎉 Bem-vindo ao Painel Privado!</h2>
-        <p>Este texto está totalmente seguro e guardado no seu GitHub privado.</p>
-        <hr>
-        <h3>🔗 Links Importantes</h3>
-        <ul>
-            <li><a href="#">Documento Secreto 1</a></li>
-            <li><a href="#">Relatório Financeiro</a></li>
-        </ul>
-        <button onclick="sair()" style="background-color: #ff4d4d; margin-top: 20px;">Sair</button>
+    <!-- 📊 CONTEÚDO PRIVADO (PAINEL DE APOSTAS) -->
+    <div id="private-dashboard" class="dashboard">
+        <div style="display: flow-root; border-bottom: 2px solid var(--light); padding-bottom: 10px;">
+            <h2 style="margin: 0; float: left; color: var(--dark);">📈 Painel de Gestão de Banca</h2>
+            <button onclick="sair()" class="btn-logout">Sair</button>
+        </div>
+
+        <!-- Cartões de Resumo Técnico -->
+        <div class="stats-container">
+            <div class="stat-card">
+                <h4>Banca Total Estipulada</h4>
+                <p>1.250,00 €</p>
+            </div>
+            <div class="stat-card lucro">
+                <h4>Lucro / Prejuízo Total</h4>
+                <p style="color: #10b981;">+ 342,50 €</p>
+            </div>
+            <div class="stat-card" style="border-left-color: #f59e0b;">
+                <h4>Apostas Ativas</h4>
+                <p>2 Pendentes</p>
+            </div>
+        </div>
+
+        <!-- Tabela de Dados Privada -->
+        <h3>📋 Registo de Operações Recentes</h3>
+        <div class="table-responsive">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Data</th>
+                        <th>Evento / Mercado</th>
+                        <th>Investimento</th>
+                        <th>Odd</th>
+                        <th>Retorno Esperado</th>
+                        <th>Estado</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>29/08/2026</td>
+                        <td>Benfica vs Porto - Ambas Marcam</td>
+                        <td>50,00 €</td>
+                        <td>1.85</td>
+                        <td>92,50 €</td>
+                        <td><span class="badge ganha">Ganha</span></td>
+                    </tr>
+                    <tr>
+                        <td>29/08/2026</td>
+                        <td>Real Madrid vs Barcelona - Vitória Casa</td>
+                        <td>100,00 €</td>
+                        <td>2.10</td>
+                        <td>210,00 €</td>
+                        <td><span class="badge perdida">Perdida</span></td>
+                    </tr>
+                    <tr>
+                        <td>30/08/2026</td>
+                        <td>Sporting vs Braga - Mais de 2.5 Golos</td>
+                        <td>30,00 €</td>
+                        <td>1.70</td>
+                        <td>51,00 €</td>
+                        <td><span class="badge pendente">Pendente</span></td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
     </div>
 
     <script>
-        // Altere aqui a sua palavra-passe de acesso
+        // Palavra-passe de acesso ao site
         const PALAVRA_PASSE_CORRETA = "SenhaSegura123";
 
         function verificarSenha() {
@@ -48,8 +132,9 @@
             const erro = document.getElementById("error-msg");
             
             if (input === PALAVRA_PASSE_CORRETA) {
-                document.getElementById("login-box").classList.add("hidden");
-                document.getElementById("private-content").classList.remove("hidden");
+                document.getElementById("login-box").style.display = "none";
+                document.getElementById("private-dashboard").style.display = "block";
+                document.body.style.alignItems = "flex-start"; // Melhora scroll da tabela
                 erro.innerText = "";
             } else {
                 erro.innerText = "Palavra-passe incorreta. Acesso negado.";
@@ -58,8 +143,9 @@
 
         function sair() {
             document.getElementById("password").value = "";
-            document.getElementById("login-box").classList.remove("hidden");
-            document.getElementById("private-content").classList.add("hidden");
+            document.getElementById("login-box").style.display = "block";
+            document.getElementById("private-dashboard").style.display = "none";
+            document.body.style.alignItems = "center";
         }
     </script>
 </body>
