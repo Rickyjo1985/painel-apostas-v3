@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Painel Multibancas</title>
+    <title>Painel Avançado Multibancas</title>
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -11,103 +11,118 @@
     <!-- 🔒 ECRÃ DE LOGIN -->
     <div id="login-box" class="box">
         <h2>🔒 Acesso Restrito</h2>
-        <p>Introduza a palavra-passe do seu painel multibancas.</p>
+        <p>Introduza a palavra-passe do seu painel técnico.</p>
         <input type="password" id="password" placeholder="Palavra-passe">
         <button onclick="verificarSenha()">Entrar no Painel</button>
         <p id="error-msg" class="error"></p>
     </div>
 
-    <!-- 📊 PAINEL DINÂMICO PRIVADO -->
+    <!-- 📊 PAINEL PRINCIPAL PRIVADO -->
     <div id="private-dashboard" class="dashboard">
-        <div style="border-bottom: 2px solid var(--light); padding-bottom: 15px; margin-bottom: 20px;">
+        <div style="float: right; margin-top: 5px;">
             <button onclick="sair()" class="btn-logout">Sair Seguro</button>
-            <h2 style="margin: 0; color: var(--dark);">📊 Gestor de Apostas Multibancas</h2>
+        </div>
+        
+        <!-- Navegação do Menu Superior -->
+        <div class="main-nav">
+            <button class="nav-link active" id="tab-gestor" onclick="mudarSeparador('gestor')">📈 Gestor de Apostas</button>
+            <button class="nav-link" id="tab-jogos" onclick="mudarSeparador('jogos')">📅 Jogos da Semana</button>
         </div>
 
-        <div class="house-filters">
-            <button class="btn-filter active" id="filter-todas" onclick="filtrarPorCasa('todas')">Todas as Bancas</button>
-            <button class="btn-filter" id="filter-betclic" onclick="filtrarPorCasa('Betclic')">Betclic</button>
-            <button class="btn-filter" id="filter-betano" onclick="filtrarPorCasa('Betano')">Betano</button>
-            <button class="btn-filter" id="filter-placard" onclick="filtrarPorCasa('Placard')">Placard</button>
-        </div>
-
-        <div class="chart-container">
-            <h4 style="margin: 0 0 5px 0; color: #666; font-size: 12px; text-transform: uppercase;">Progresso da Banca Selecionada (Meta Alvo: +500€)</h4>
-            <div class="progress-bar-bg">
-                <div id="chart-fill" class="progress-bar-fill"></div>
-                <div id="chart-text" class="progress-text">0% (0.00 €)</div>
-            </div>
-        </div>
-
-        <div class="stats-container">
-            <div class="stat-card" style="border-left-color: #a0aec0;">
-                <h4>Investimento Filtro</h4>
-                <p id="stat-investido">0,00 €</p>
-            </div>
-            <div class="stat-card" style="border-left-color: var(--success);">
-                <h4>Lucro Filtro</h4>
-                <p id="stat-lucro">0,00 €</p>
-            </div>
-            <div class="stat-card" style="border-left-color: #f59e0b;">
-                <h4>Ativas Filtro</h4>
-                <p id="stat-pendentes">0 Pendentes</p>
-            </div>
-        </div>
-
-        <div class="layout-grid">
-            <div class="form-section">
-                <h3 style="margin-top: 0; color: var(--dark);">📝 Registar Operação</h3>
-                <form id="bet-form" onsubmit="adicionarAposta(event)">
-                    <label>Casa de Apostas</label>
-                    <select id="form-casa">
-                        <option value="Betclic">Betclic</option>
-                        <option value="Betano">Betano</option>
-                        <option value="Placard">Placard</option>
-                    </select>
-
-                    <label>Evento / Mercado</label>
-                    <input type="text" id="form-evento" placeholder="Ex: Benfica vs Porto" required>
-
-                    <label>Investimento (€)</label>
-                    <input type="number" id="form-valor" step="0.01" placeholder="Ex: 20.00" required>
-
-                    <label>Odd (Cotação)</label>
-                    <input type="number" id="form-odd" step="0.01" placeholder="Ex: 1.85" required>
-
-                    <label>Estado Inicial</label>
-                    <select id="form-estado">
-                        <option value="pendente">Pendente</option>
-                        <option value="ganha">Ganha</option>
-                        <option value="perdida">Perdida</option>
-                    </select>
-
-                    <button type="submit">Adicionar</button>
-                </form>
+        <!-- SEPARADOR 1: GESTOR DE APOSTAS -->
+        <div id="view-gestor">
+            <div class="house-filters">
+                <button class="btn-filter active" id="filter-todas" onclick="filtrarPorCasa('todas')">Todas as Bancas</button>
+                <button class="btn-filter" id="filter-betclic" onclick="filtrarPorCasa('Betclic')">Betclic</button>
+                <button class="btn-filter" id="filter-betano" onclick="filtrarPorCasa('Betano')">Betano</button>
+                <button class="btn-filter" id="filter-placard" onclick="filtrarPorCasa('Placard')">Placard</button>
             </div>
 
-            <div>
-                <h3 style="margin-top: 0; color: var(--dark);">📋 Histórico de Operações</h3>
-                <div class="table-responsive">
-                    <table>
-                        <thead>
-                            <tr>
-                                <th>Banca</th>
-                                <th>Evento</th>
-                                <th>Valor</th>
-                                <th>Odd</th>
-                                <th>Retorno</th>
-                                <th>Estado</th>
-                                <th></th>
-                            </tr>
-                        </thead>
-                        <tbody id="table-body"></tbody>
-                    </table>
+            <div class="chart-container">
+                <h4 style="margin: 0; color: #666; font-size: 11px; text-transform: uppercase;">Progresso da Banca Selecionada (Meta: +500€)</h4>
+                <div class="progress-bar-bg">
+                    <div id="chart-fill" class="progress-bar-fill"></div>
+                    <div id="chart-text" class="progress-text">0%</div>
                 </div>
+            </div>
+
+            <div class="stats-container">
+                <div class="stat-card" style="border-left-color: #a0aec0;">
+                    <h4>Investimento</h4>
+                    <p id="stat-investido">0,00 €</p>
+                </div>
+                <div class="stat-card" style="border-left-color: var(--success);">
+                    <h4>Lucro / Prejuízo</h4>
+                    <p id="stat-lucro">0,00 €</p>
+                </div>
+                <div class="stat-card" style="border-left-color: #f59e0b;">
+                    <h4>Ativas</h4>
+                    <p id="stat-pendentes">0 Ativas</p>
+                </div>
+            </div>
+
+            <div class="layout-grid">
+                <div class="form-section">
+                    <h3 style="margin-top: 0; color: var(--dark);">📝 Registar Operação</h3>
+                    <form id="bet-form" onsubmit="adicionarAposta(event)">
+                        <label>Casa de Apostas</label>
+                        <select id="form-casa">
+                            <option value="Betclic">Betclic</option>
+                            <option value="Betano">Betano</option>
+                            <option value="Placard">Placard</option>
+                        </select>
+                        <label>Evento / Mercado</label>
+                        <input type="text" id="form-evento" placeholder="Ex: Benfica vs Porto" required>
+                        <label>Investimento (€)</label>
+                        <input type="number" id="form-valor" step="0.01" required>
+                        <label>Odd</label>
+                        <input type="number" id="form-odd" step="0.01" required>
+                        <label>Estado</label>
+                        <select id="form-estado">
+                            <option value="pendente">Pendente</option>
+                            <option value="ganha">Ganha</option>
+                            <option value="perdida">Perdida</option>
+                        </select>
+                        <button type="submit">Adicionar</button>
+                    </form>
+                </div>
+                <div>
+                    <h3 style="margin-top: 0; color: var(--dark);">📋 Histórico</h3>
+                    <div class="table-responsive">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Banca</th>
+                                    <th>Evento</th>
+                                    <th>Valor</th>
+                                    <th>Odd</th>
+                                    <th>Retorno</th>
+                                    <th>Estado</th>
+                                    <th></th>
+                                </tr>
+                            </thead>
+                            <tbody id="table-body"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- SEPARADOR 2: JOGOS DA SEMANA -->
+        <div id="view-jogos" style="display: none;">
+            <div class="game-filters">
+                <button class="btn-filter active" id="gfilter-hoje" onclick="filtrarJogos('hoje')">Hoje</button>
+                <button class="btn-filter" id="gfilter-amanha" onclick="filtrarJogos('amanha')">Amanhã</button>
+                <button class="btn-filter" id="gfilter-fds" onclick="filtrarJogos('fds')">Fim de Semana</button>
+                <button class="btn-filter" id="gfilter-top6" onclick="filtrarJogos('top6')" style="border: 1px solid #f59e0b;">⭐ Top 6 (Sexta-Dom)</button>
+            </div>
+            
+            <div class="games-grid" id="games-container">
+                <!-- Preenchido dinamicamente via JS -->
             </div>
         </div>
     </div>
 
-    <!-- Vinculação do ficheiro lógico separado -->
     <script src="script.js"></script>
 </body>
 </html>
