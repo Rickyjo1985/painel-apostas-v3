@@ -3,8 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Painel de Apostas Dinâmico</title>
-    <!-- Ligação ao ficheiro de estilos separado -->
+    <title>Painel de Apostas Dinâmico com Gráficos</title>
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -22,7 +21,16 @@
     <div id="private-dashboard" class="dashboard">
         <div style="border-bottom: 2px solid var(--light); padding-bottom: 15px; margin-bottom: 20px;">
             <button onclick="sair()" class="btn-logout">Sair Seguro</button>
-            <h2 style="margin: 0; color: var(--dark);">📊 Gestor de Apostas</h2>
+            <h2 style="margin: 0; color: var(--dark);">📊 Gestor de Apostas Profissional</h2>
+        </div>
+
+        <!-- Barra Dinâmica de Metas -->
+        <div class="chart-container">
+            <h4 style="margin: 0 0 5px 0; color: #666; font-size: 12px; text-transform: uppercase;">Gráfico de Lucro Alvo (Meta: +500€)</h4>
+            <div class="progress-bar-bg">
+                <div id="chart-fill" class="progress-bar-fill"></div>
+                <div id="chart-text" class="progress-text">0% (0.00 €)</div>
+            </div>
         </div>
 
         <div class="stats-container">
@@ -118,6 +126,18 @@
             atualizarPainel();
         }
 
+        // Função que altera o estado em tempo real sem recarregar a página
+        function mudarEstadoAposta(id, novoEstado) {
+            apostas = apostas.map(a => {
+                if (a.id === id) {
+                    a.estado = novoEstado;
+                }
+                return a;
+            });
+            localStorage.setItem('minhas_apostas', JSON.stringify(apostas));
+            atualizarPainel();
+        }
+
         function eliminarAposta(id) {
             apostas = apostas.filter(a => a.id !== id);
             localStorage.setItem('minhas_apostas', JSON.stringify(apostas));
@@ -143,7 +163,13 @@
                     <td>${a.valor.toFixed(2)} €</td>
                     <td>${a.odd.toFixed(2)}</td>
                     <td>${retornoBruto.toFixed(2)} €</td>
-                    <td><span class="badge ${a.estado}">${a.estado}</span></td>
+                    <td>
+                        <select class="table-select" onchange="mudarEstadoAposta(${a.id}, this.value)">
+                            <option value="pendente" ${a.estado === 'pendente' ? 'selected' : ''}>Pendente</option>
+                            <option value="ganha" ${a.estado === 'ganha' ? 'selected' : ''}>Ganha</option>
+                            <option value="perdida" ${a.estado === 'perdida' ? 'selected' : ''}>Perdida</option>
+                        </select>
+                    </td>
                     <td><button class="btn-delete" onclick="eliminarAposta(${a.id})">×</button></td>
                 `;
                 tbody.appendChild(tr);
@@ -154,6 +180,17 @@
             cardLucro.innerText = `${lucroLiquido >= 0 ? '+' : ''}${lucroLiquido.toFixed(2)} €`;
             cardLucro.style.color = lucroLiquido >= 0 ? "var(--success)" : "var(--danger)";
             document.getElementById("stat-pendentes").innerText = `${pendentes} Ativa(s)`;
+
+            // Atualização automática da Barra Gráfica de Progresso
+            const meta = 500;
+            let percentagem = (lucroLiquido / meta) * 100;
+            if (percentagem < 0) percentagem = 0;
+            if (percentagem > 100) percentagem = 100;
+            
+            const chartFill = document.getElementById("chart-fill");
+            chartFill.style.width = `${percentagem}%`;
+            chartFill.style.backgroundColor = lucroLiquido >= 0 ? "var(--success)" : "var(--danger)";
+            document.getElementById("chart-text").innerText = `${percentagem.toFixed(0)}% (${lucroLiquido.toFixed(2)} € / ${meta} €)`;
         }
 
         function sair() {
