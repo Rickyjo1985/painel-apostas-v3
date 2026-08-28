@@ -94,6 +94,29 @@ button:hover { opacity: 0.9; }
     margin-top: -5px; 
 }
 
+/* --- Filtros de Casas de Apostas --- */
+.house-filters {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 20px;
+    overflow-x: auto;
+    padding-bottom: 5px;
+}
+
+.btn-filter {
+    background-color: #e2e8f0;
+    color: var(--dark);
+    padding: 8px 16px;
+    font-size: 13px;
+    width: auto;
+    border-radius: 20px;
+}
+
+.btn-filter.active {
+    background-color: var(--primary);
+    color: white;
+}
+
 .stats-container { 
     display: grid; 
     grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); 
@@ -111,7 +134,6 @@ button:hover { opacity: 0.9; }
 .stat-card h4 { margin: 0; color: #666; font-size: 13px; text-transform: uppercase; }
 .stat-card p { margin: 5px 0 0 0; font-size: 22px; font-weight: bold; color: var(--dark); }
 
-/* --- Novo Gráfico de Progresso Horizontal --- */
 .chart-container {
     background: var(--light);
     padding: 15px;
@@ -158,7 +180,6 @@ table { width: 100%; border-collapse: collapse; text-align: left; font-size: 14p
 th, td { padding: 12px; border-bottom: 1px solid #eee; }
 th { background-color: var(--dark); color: white; }
 
-/* --- Novo Seletor Inline para a Tabela --- */
 select.table-select {
     width: auto;
     padding: 4px 8px;
