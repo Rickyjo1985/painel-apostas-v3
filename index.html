@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="pt-PT">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Área Privada</title>
+    <style>
+        body { font-family: Arial, sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; background-color: #f4f4f9; }
+        .box { background: white; padding: 30px; border-radius: 8px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); text-align: center; max-width: 400px; width: 100%; }
+        input { width: 90%; padding: 10px; margin: 15px 0; border: 1px solid #ccc; border-radius: 4px; font-size: 16px; }
+        button { background-color: #0070f3; color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer; font-size: 16px; width: 96%; }
+        button:hover { background-color: #0051cb; }
+        .error { color: red; margin-top: 10px; font-size: 14px; }
+        .hidden { display: none; }
+        .content { text-align: left; }
+    </style>
+</head>
+<body>
+
+    <!-- Ecrã de Login -->
+    <div id="login-box" class="box">
+        <h2>🔒 Acesso Restrito</h2>
+        <p>Introduza a palavra-passe para aceder ao painel.</p>
+        <input type="password" id="password" placeholder="Palavra-passe">
+        <button onclick="verificarSenha()">Entrar</button>
+        <p id="error-msg" class="error"></p>
+    </div>
+
+    <!-- Conteúdo Privado (Escondido inicialmente) -->
+    <div id="private-content" class="box hidden content">
+        <h2>🎉 Bem-vindo ao Painel Privado!</h2>
+        <p>Este texto está totalmente seguro e guardado no seu GitHub privado.</p>
+        <hr>
+        <h3>🔗 Links Importantes</h3>
+        <ul>
+            <li><a href="#">Documento Secreto 1</a></li>
+            <li><a href="#">Relatório Financeiro</a></li>
+        </ul>
+        <button onclick="sair()" style="background-color: #ff4d4d; margin-top: 20px;">Sair</button>
+    </div>
+
+    <script>
+        // Altere aqui a sua palavra-passe de acesso
+        const PALAVRA_PASSE_CORRETA = "SenhaSegura123";
+
+        function verificarSenha() {
+            const input = document.getElementById("password").value;
+            const erro = document.getElementById("error-msg");
+            
+            if (input === PALAVRA_PASSE_CORRETA) {
+                document.getElementById("login-box").classList.add("hidden");
+                document.getElementById("private-content").classList.remove("hidden");
+                erro.innerText = "";
+            } else {
+                erro.innerText = "Palavra-passe incorreta. Acesso negado.";
+            }
+        }
+
+        function sair() {
+            document.getElementById("password").value = "";
+            document.getElementById("login-box").classList.remove("hidden");
+            document.getElementById("private-content").classList.add("hidden");
+        }
+    </script>
+</body>
+</html>
