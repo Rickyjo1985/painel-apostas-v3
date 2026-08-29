@@ -1,4 +1,4 @@
-const PSW = "SenhaSegura123";
+const PSW = "Rickyjo1985";
 let apostas = JSON.parse(localStorage.getItem('banca_data')) || [];
 let fltCasa = "todas", idEdicao = null;
 
