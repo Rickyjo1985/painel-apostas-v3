@@ -1,14 +1,21 @@
+let idApostaEmEdicao = null;
+
 function adicionarAposta(e) {
     e.preventDefault();
-    let lista = [];
+    let subJogos = [];
     document.querySelectorAll(".input-evento").forEach((inp, idx) => {
         const o = parseFloat(document.querySelectorAll(".input-odd")[idx].value) || 1;
-        lista.push(`${inp.value} (${o.toFixed(2)})`);
+        subJogos.push({ nome: inp.value, odd: o });
     });
+    
     apostas.push({
-        id: Date.now(), casa: document.getElementById("form-casa").value, tipo: document.getElementById("form-tipo").value,
-        evento: lista.join(" + "), valor: parseFloat(document.getElementById("form-valor").value),
-        odd: parseFloat(document.getElementById("form-odd-total").value), estado: document.getElementById("form-estado").value
+        id: Date.now(),
+        casa: document.getElementById("form-casa").value,
+        tipo: document.getElementById("form-tipo").value,
+        jogos: subJogos,
+        valor: parseFloat(document.getElementById("form-valor").value),
+        odd: parseFloat(document.getElementById("form-odd-total").value),
+        estado: document.getElementById("form-estado").value
     });
     localStorage.setItem('banca_data', JSON.stringify(apostas));
     document.getElementById("bet-form").reset(); alternarTipoAposta('simples'); atualizarPainel();
@@ -17,11 +24,6 @@ function adicionarAposta(e) {
 function mudarEstadoAposta(id, state) {
     apostas = apostas.map(a => { if (a.id === id) a.estado = state; return a; });
     localStorage.setItem('banca_data', JSON.stringify(apostas)); atualizarPainel();
-}
-
-function editarTextoEvento(id, novoTexto) {
-    apostas = apostas.map(a => { if (a.id === id) a.evento = novoTexto; return a; });
-    localStorage.setItem('banca_data', JSON.stringify(apostas));
 }
 
 function eliminarAposta(id) {
@@ -34,26 +36,93 @@ function filtrarPorCasa(c) {
     document.getElementById(`filter-${c.toLowerCase()}`).classList.add("active"); atualizarPainel();
 }
 
+// Abre a janela modal com os campos editáveis de cada jogo individual do boletim
+function abrirDetalhesAposta(id) {
+    idApostaEmEdicao = id;
+    const aposta = apostas.find(a => a.id === id);
+    if (!aposta) return;
+
+    document.getElementById("modal-titulo").innerText = `🔎 Ajustar Boletim - ${aposta.casa}`;
+    document.getElementById("modal-banca-valor").value = aposta.valor;
+    
+    const container = document.getElementById("modal-jogos-list");
+    container.innerHTML = "";
+
+    aposta.jogos.forEach((jogo, index) => {
+        const div = document.createElement("div");
+        div.className = "multi-game-row";
+        div.style.margin = "10px 0";
+        div.innerHTML = `
+            <input type="text" class="modal-input-nome" value="${jogo.nome}" style="margin:0;" required>
+            <input type="number" class="modal-input-odd" step="0.01" value="${jogo.odd}" style="width:75px; margin:0;" oninput="recalcularOddModal()" required>
+        `;
+        container.appendChild(div);
+    });
+
+    recalcularOddModal();
+    document.getElementById("detalhes-modal").style.display = "flex";
+}
+
+function recalcularOddModal() {
+    const odds = document.querySelectorAll(".modal-input-odd");
+    const valorBanca = parseFloat(document.getElementById("modal-banca-valor").value) || 0;
+    let totalOdd = 1;
+    odds.forEach(i => { const v = parseFloat(i.value) || 1; totalOdd *= v; });
+    
+    document.getElementById("modal-total-odd").innerText = totalOdd.toFixed(2);
+    document.getElementById("modal-total-retorno").innerText = `${(valorBanca * totalOdd).toFixed(2)} €`;
+}
+
+function guardarEdicaoModal() {
+    const nomes = document.querySelectorAll(".modal-input-nome");
+    const odds = document.querySelectorAll(".modal-input-odd");
+    let novosJogos = [];
+    let novaOddTotal = 1;
+
+    nomes.forEach((inp, idx) => {
+        const oVal = parseFloat(odds[idx].value) || 1;
+        novaOddTotal *= oVal;
+        novosJogos.push({ nome: inp.value, odd: oVal });
+    });
+
+    apostas = apostas.map(a => {
+        if (a.id === idApostaEmEdicao) {
+            a.valor = parseFloat(document.getElementById("modal-banca-valor").value) || 0;
+            a.jogos = novosJogos;
+            a.odd = novaOddTotal;
+        }
+        return a;
+    });
+
+    localStorage.setItem('banca_data', JSON.stringify(apostas));
+    fecharModal();
+    atualizarPainel();
+}
+
+function fecharModal() { document.getElementById("detalhes-modal").style.display = "none"; }
+
 function atualizarPainel() {
     const tbody = document.getElementById("table-body"); tbody.innerHTML = "";
     let tInv = 0, lLiq = 0, pends = 0;
+    
     apostas.forEach(a => {
         if (fltCasa !== "todas" && a.casa !== fltCasa) return;
         tInv += a.valor; let rb = a.valor * a.odd;
         if (a.estado === 'ganha') lLiq += (rb - a.valor); else if (a.estado === 'perdida') lLiq -= a.valor; else pends++;
+        
+        const textoResumo = a.jogos.length === 1 ? a.jogos[0].nome : `Aposta Múltipla (${a.jogos.length} Jogos)`;
         const tr = document.createElement("tr");
         tr.innerHTML = `
             <td><b>${a.casa}</b><br><small>${a.tipo}</small></td>
-            <td>
-                <input type="text" value="${a.evento}" 
-                    onchange="editarTextoEvento(${a.id}, this.value)" 
-                    style="margin:0; padding:4px; font-weight:bold; background:transparent; border:1px solid transparent; width:100%; max-width:300px;" 
-                    onfocus="this.style.background='#fff'; this.style.borderColor='#ccc'" 
-                    onblur="this.style.background='transparent'; this.style.borderColor='transparent'">
-            </td>
-            <td>${a.valor.toFixed(2)}€</td><td>${a.odd.toFixed(2)}</td><td>${rb.toFixed(2)}€</td>
+            <td><div style="max-width:260px; font-weight:bold; color:#2d3748;">${textoResumo}</div></td>
+            <td>${a.valor.toFixed(2)}€</td>
+            <td>${a.odd.toFixed(2)}</td>
+            <td>${rb.toFixed(2)}€</td>
             <td><select class="table-select" onchange="mudarEstadoAposta(${a.id}, this.value)"><option value="pendente" ${a.estado==='pendente'?'selected':''}>Pendente</option><option value="ganha" ${a.estado==='ganha'?'selected':''}>Ganha</option><option value="perdida" ${a.estado==='perdida'?'selected':''}>Perdida</option></select></td>
-            <td><button class="btn-delete" onclick="eliminarAposta(${a.id})">×</button></td>
+            <td style="white-space:nowrap;">
+                <button class="btn-view" onclick="abrirDetalhesAposta(${a.id})">👁️ Detalhes</button>
+                <button class="btn-delete" onclick="eliminarAposta(${a.id})">×</button>
+            </td>
         `;
         tbody.appendChild(tr);
     });
