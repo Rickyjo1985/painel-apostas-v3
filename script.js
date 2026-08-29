@@ -2,7 +2,6 @@ const PALAVRA_PASSE_CORRETA = "Rickyjo1985";
 let apostas = JSON.parse(localStorage.getItem('minhas_apostas_multibanca')) || [];
 let casaFiltroAtual = "todas";
 
-// Base de Dados de Jogos e Sugestões Analisadas (Agosto 2026)
 const baseJogos = [
     { id: 1, categoria: 'hoje', data: 'Sábado, 29 Ago', liga: 'Liga Portugal', equipas: 'Ac. Viseu vs FC Porto', dica: 'Vitória do FC Porto', odd: 1.45, top6: true },
     { id: 2, categoria: 'hoje', data: 'Sábado, 29 Ago', liga: 'Premier League', equipas: 'Liverpool vs Nottingham Forest', dica: 'Mais de 2.5 Golos', odd: 1.55, top6: true },
@@ -22,13 +21,12 @@ function verificarSenha() {
         document.getElementById("private-dashboard").style.display = "block";
         document.body.style.alignItems = "flex-start";
         atualizarPainel();
-        renderizarJogos('hoje'); // Inicia mostrando os jogos de Hoje
+        renderizarJogos('hoje');
     } else {
         erro.innerText = "Palavra-passe incorreta.";
     }
 }
 
-// Alternar Janela Principal (Abas)
 function mudarSeparador(tab) {
     document.querySelectorAll(".main-nav .nav-link").forEach(b => b.classList.remove("active"));
     if (tab === 'gestor') {
@@ -42,65 +40,91 @@ function mudarSeparador(tab) {
     }
 }
 
-// Filtros do Separador de Jogos
-function filtrarJogos(categoria) {
-    document.querySelectorAll(".game-filters .btn-filter").forEach(b => b.classList.remove("active"));
-    document.getElementById(`gfilter-${categoria}`).classList.add("active");
-    renderizarJogos(categoria);
-}
-
-// Constrói os Cartões Visuais de Sugestões
-function renderizarJogos(filtro) {
-    const container = document.getElementById("games-container");
-    container.innerHTML = "";
-
-    baseJogos.forEach(j => {
-        if (filtro === 'top6' && !j.top6) return;
-        if (filtro !== 'top6' && j.categoria !== filtro) return;
-
-        const card = document.createElement("div");
-        card.className = `game-card ${j.top6 ? 'top6' : ''}`;
-        card.innerHTML = `
-            <div>
-                <div class="game-meta">
-                    <span>⚽ ${j.liga}</span>
-                    <span>${j.data}</span>
-                </div>
-                <div class="game-title">${j.equipas}</div>
-                <div class="suggestion-box">
-                    <small style="color:#666;">🎯 Sugestão:</small>
-                    <div style="font-weight:bold; color:var(--dark); margin:2px 0;">${j.dica}</div>
-                    <span style="background:var(--primary); color:white; padding:2px 6px; font-size:11px; border-radius:4px; font-weight:bold;">Odd: ${j.odd.toFixed(2)}</span>
-                </div>
+// Alternar entre o layout de aposta Simples ou Múltipla
+function alternarTipoAposta(tipo) {
+    const container = document.getElementById("jogos-formulario-container");
+    const btnAdd = document.getElementById("btn-add-jogo");
+    
+    if (tipo === 'simples') {
+        btnAdd.style.display = "none";
+        container.innerHTML = `
+            <div class="multi-game-row">
+                <input type="text" class="input-evento" placeholder="Jogo / Mercado" required>
+                <input type="number" class="input-odd" step="0.01" placeholder="Odd" style="width: 80px;" oninput="calcularOddTotalMultipla()" required>
             </div>
-            <button class="btn-import" onclick="importarParaFormulario('${j.equipas} - ${j.dica}', ${j.odd})">⚡ Importar Odd</button>
         `;
-        container.appendChild(card);
+    } else {
+        btnAdd.style.display = "block";
+        container.innerHTML = `
+            <div class="multi-game-row">
+                <input type="text" class="input-evento" placeholder="Jogo 1" required>
+                <input type="number" class="input-odd" step="0.01" placeholder="Odd" style="width: 80px;" oninput="calcularOddTotalMultipla()" required>
+            </div>
+            <div class="multi-game-row">
+                <input type="text" class="input-evento" placeholder="Jogo 2" required>
+                <input type="number" class="input-odd" step="0.01" placeholder="Odd" style="width: 80px;" oninput="calcularOddTotalMultipla()" required>
+            </div>
+        `;
+    }
+    document.getElementById("form-odd-total").value = "";
+}
+
+function adicionarLinhaJogoForm() {
+    const container = document.getElementById("jogos-formulario-container");
+    const numeroJogos = container.children.length + 1;
+    
+    const div = document.createElement("div");
+    div.className = "multi-game-row";
+    div.innerHTML = `
+        <input type="text" class="input-evento" placeholder="Jogo ${numeroJogos}" required>
+        <input type="number" class="input-odd" step="0.01" placeholder="Odd" style="width: 80px;" oninput="calcularOddTotalMultipla()" required>
+    `;
+    container.appendChild(div);
+}
+
+function calcularOddTotalMultipla() {
+    const oddsInputs = document.querySelectorAll(".input-odd");
+    let oddTotal = 1;
+    let temValores = false;
+
+    oddsInputs.forEach(input => {
+        const val = parseFloat(input.value);
+        if (!isNaN(val) && val > 0) {
+            oddTotal *= val;
+            temValores = true;
+        }
     });
+
+    document.getElementById("form-odd-total").value = temValores ? oddTotal.toFixed(2) : "";
 }
 
-// Função Avançada: Cola a Dica automaticamente no Formulário de Registo e muda de aba
-function importarParaFormulario(evento, odd) {
-    mudarSeparador('gestor');
-    document.getElementById("form-evento").value = evento;
-    document.getElementById("form-odd").value = odd;
-    document.getElementById("form-valor").focus();
-}
-
-// --- Funções Originais de Gestão Multibanca ---
 function adicionarAposta(event) {
     event.preventDefault();
+    
+    const eventosInputs = document.querySelectorAll(".input-evento");
+    const oddsInputs = document.querySelectorAll(".input-odd");
+    let listaEventos = [];
+
+    eventosInputs.forEach((input, index) => {
+        const oddVal = parseFloat(oddsInputs[index].value) || 1;
+        listaEventos.push(`${input.value} (${oddVal.toFixed(2)})`);
+    });
+
     const novaAposta = {
         id: Date.now(),
         casa: document.getElementById("form-casa").value,
-        evento: document.getElementById("form-evento").value,
+        tipo: document.getElementById("form-tipo").value,
+        evento: listaEventos.join(" + "),
         valor: parseFloat(document.getElementById("form-valor").value),
-        odd: parseFloat(document.getElementById("form-odd").value),
+        odd: parseFloat(document.getElementById("form-odd-total").value),
         estado: document.getElementById("form-estado").value
     };
+
     apostas.push(novaAposta);
     localStorage.setItem('minhas_apostas_multibanca', JSON.stringify(apostas));
+    
     document.getElementById("bet-form").reset();
+    alternarTipoAposta('simples');
     atualizarPainel();
 }
 
@@ -139,8 +163,11 @@ function atualizarPainel() {
 
         const tr = document.createElement("tr");
         tr.innerHTML = `
-            <td><span style="font-weight:bold; color:var(--primary);">${a.casa}</span></td>
-            <td><strong>${a.evento}</strong></td>
+            <td>
+                <span style="font-weight:bold; color:var(--primary);">${a.casa}</span><br>
+                <small style="text-transform:uppercase; color:#666;">${a.tipo}</small>
+            </td>
+            <td><div style="max-width:300px; word-wrap:break-word;">${a.evento}</div></td>
             <td>${a.valor.toFixed(2)} €</td>
             <td>${a.odd.toFixed(2)}</td>
             <td>${retornoBruto.toFixed(2)} €</td>
@@ -173,9 +200,14 @@ function atualizarPainel() {
     document.getElementById("chart-text").innerText = `${percentagem.toFixed(0)}% (${lucroLiquido.toFixed(2)}€ / ${meta}€)`;
 }
 
-function sair() {
-    document.getElementById("password").value = "";
-    document.getElementById("login-box").style.display = "block";
-    document.getElementById("private-dashboard").style.display = "none";
-    document.body.style.alignItems = "center";
+function filtrarJogos(categoria) {
+    document.querySelectorAll(".game-filters .btn-filter").forEach(b => b.classList.remove("active"));
+    document.getElementById(`gfilter-${categoria}`).classList.add("active");
+    renderizarJogos(categoria);
 }
+
+function renderizarJogos(filtro) {
+    const container = document.getElementById("games-container");
+    container.innerHTML = "";
+    baseJogos.forEach(j => {
+        if (filtro === 'top6' && !j.top6) return;
