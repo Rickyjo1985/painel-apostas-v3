@@ -5,6 +5,11 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Painel Avançado Multibancas</title>
     <link rel="stylesheet" href="style.css">
+    <style>
+        .multi-game-row { display: flex; gap: 8px; margin-bottom: 8px; align-items: center; }
+        .multi-game-row input { margin: 0; }
+        .btn-sub { background-color: #666; padding: 6px; font-size: 12px; width: auto; margin: 5px 0; }
+    </style>
 </head>
 <body>
 
@@ -23,7 +28,6 @@
             <button onclick="sair()" class="btn-logout">Sair Seguro</button>
         </div>
         
-        <!-- Navegação do Menu Superior -->
         <div class="main-nav">
             <button class="nav-link active" id="tab-gestor" onclick="mudarSeparador('gestor')">📈 Gestor de Apostas</button>
             <button class="nav-link" id="tab-jogos" onclick="mudarSeparador('jogos')">📅 Jogos da Semana</button>
@@ -62,6 +66,7 @@
             </div>
 
             <div class="layout-grid">
+                <!-- FORMULÁRIO ATUALIZADO PARA SIMPLES / MÚLTIPLAS -->
                 <div class="form-section">
                     <h3 style="margin-top: 0; color: var(--dark);">📝 Registar Operação</h3>
                     <form id="bet-form" onsubmit="adicionarAposta(event)">
@@ -71,31 +76,49 @@
                             <option value="Betano">Betano</option>
                             <option value="Placard">Placard</option>
                         </select>
-                        <label>Evento / Mercado</label>
-                        <input type="text" id="form-evento" placeholder="Ex: Benfica vs Porto" required>
+
+                        <label>Tipo de Aposta</label>
+                        <select id="form-tipo" onchange="alternarTipoAposta(this.value)">
+                            <option value="simples">Simples (1 Jogo)</option>
+                            <option value="multipla">Múltipla (Vários Jogos)</option>
+                        </select>
+
+                        <!-- Zona de Jogos Dinâmica -->
+                        <div id="jogos-formulario-container">
+                            <div class="multi-game-row">
+                                <input type="text" class="input-evento" placeholder="Jogo / Mercado" required>
+                                <input type="number" class="input-odd" step="0.01" placeholder="Odd" style="width: 80px;" oninput="calcularOddTotalMultipla()" required>
+                            </div>
+                        </div>
+
+                        <button type="button" id="btn-add-jogo" class="btn-sub" style="display:none;" onclick="adicionarLinhaJogoForm()">+ Adicionar Jogo</button>
+
                         <label>Investimento (€)</label>
                         <input type="number" id="form-valor" step="0.01" required>
-                        <label>Odd</label>
-                        <input type="number" id="form-odd" step="0.01" required>
+
+                        <label>Odd Total Calculada</label>
+                        <input type="number" id="form-odd-total" step="0.01" readonly style="background:#e2e8f0; font-weight:bold;">
+
                         <label>Estado</label>
                         <select id="form-estado">
                             <option value="pendente">Pendente</option>
                             <option value="ganha">Ganha</option>
                             <option value="perdida">Perdida</option>
                         </select>
-                        <button type="submit">Adicionar</button>
+                        <button type="submit">Adicionar Operação</button>
                     </form>
                 </div>
+
                 <div>
                     <h3 style="margin-top: 0; color: var(--dark);">📋 Histórico</h3>
                     <div class="table-responsive">
                         <table>
                             <thead>
                                 <tr>
-                                    <th>Banca</th>
-                                    <th>Evento</th>
+                                    <th>Banca / Tipo</th>
+                                    <th>Eventos / Jogos Incluídos</th>
                                     <th>Valor</th>
-                                    <th>Odd</th>
+                                    <th>Odd Total</th>
                                     <th>Retorno</th>
                                     <th>Estado</th>
                                     <th></th>
@@ -116,10 +139,7 @@
                 <button class="btn-filter" id="gfilter-fds" onclick="filtrarJogos('fds')">Fim de Semana</button>
                 <button class="btn-filter" id="gfilter-top6" onclick="filtrarJogos('top6')" style="border: 1px solid #f59e0b;">⭐ Top 6 (Sexta-Dom)</button>
             </div>
-            
-            <div class="games-grid" id="games-container">
-                <!-- Preenchido dinamicamente via JS -->
-            </div>
+            <div class="games-grid" id="games-container"></div>
         </div>
     </div>
 
