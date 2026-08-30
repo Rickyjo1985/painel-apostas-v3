@@ -165,18 +165,18 @@
             const strSab = `Sábado, ${sabado.toLocaleDateString('pt-PT', opcoes)}`;
             const strDom = `Domingo, ${domingo.toLocaleDateString('pt-PT', opcoes)}`;
 
-            // LISTAGEM ATUALIZADA COM OS CONFRONTOS CORRETOS DE HOJE (30 DE AGOSTO)
+            // JORNADA REAL DE AGOSTO DE 2026 
             baseJogos = [
-                { id: 1, categoria: 'hoje', data: strHoje, liga: 'Liga Portugal', equipas: 'Benfica vs Estrela da Amadora', dica: 'Vitória Benfica (Handicap -1)', odd: 1.35, top6: true },
-                { id: 2, categoria: 'hoje', data: strHoje, liga: 'Premier League', equipas: 'Man. United vs Liverpool', dica: 'Mais de 2.5 Golos', odd: 1.55, top6: true },
-                { id: 3, categoria: 'amanha', data: strAmanha, liga: 'La Liga', equipas: 'Real Madrid vs Real Betis', dica: 'Vitória Real Madrid', odd: 1.30, top6: true },
-                { id: 4, categoria: 'amanha', data: strAmanha, liga: 'Liga Portugal', equipas: 'Vitória SC vs Famalicão', dica: 'Ambas Marcam: Sim', odd: 1.85, top6: true },
-                { id: 5, categoria: 'fds', data: strSab, liga: 'Liga Portugal', equipas: 'Sporting vs Porto', dica: 'Mais de 1.5 Golos', odd: 1.28, top6: true },
-                { id: 6, categoria: 'fds', data: strDom, liga: 'Serie A', equipas: 'Juventus vs AS Roma', dica: 'Menos de 2.5 Golos', odd: 1.65, top6: false },
-                { id: 7, categoria: 'top6', data: strHoje, liga: 'Champions League', equipas: 'Bayern vs Real Madrid', dica: 'Ambas Marcam: Sim', odd: 1.58, top6: true },
-                { id: 8, categoria: 'top6', data: strAmanha, liga: 'Champions League', equipas: 'PSG vs Juventus', dica: 'Mais de 2.5 Golos', odd: 1.70, top6: true }
-            ];
+                { id: 1, categoria: 'hoje', data: strHoje, liga: 'Premier League', equipas: 'Manchester United vs Ipswich Town', dica: 'Vitória Man. United', odd: 1.38, top6: true },
+                { id: 2, categoria: 'hoje', data: strHoje, liga: 'Liga Portugal', equipas: 'Arouca vs Porto', dica: 'Mais de 2.5 Golos', odd: 1.68, top6: true },
+                { id: 3, categoria: 'amanha', data: strAmanha, liga: 'Liga Portugal', equipas: 'Estoril Praia vs Benfica', dica: 'Vitória Benfica', odd: 1.32, top6: true },
+                { id: 4, categoria: 'amanha', data: strAmanha, liga: 'Liga Portugal', equipas: 'Sporting vs Famalicão', dica: 'Vitória Sporting', odd: 1.25, top6: true },
+                { id: 5, categoria: 'fds', data: strSab, liga: 'La Liga', equipas: 'Real Madrid vs Málaga', dica: 'Real Madrid Handicap -1', odd: 1.60, top6: false },
+                { id: 6, categoria: 'fds', data: strDom, liga: 'Serie A', equipas: 'Juventus vs Parma', dica: 'Menos de 3.5 Golos', odd: 1.40, top6: false }
+            ]  ;
             renderizarJogos('hoje');
+        }
+
         }
 
         function mudarEstadoAposta(id, state) {
