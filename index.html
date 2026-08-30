@@ -165,14 +165,16 @@
             const strSab = `Sábado, ${sabado.toLocaleDateString('pt-PT', opcoes)}`;
             const strDom = `Domingo, ${domingo.toLocaleDateString('pt-PT', opcoes)}`;
 
-            // JORNADA REAL DE HOJE CORRIGIDA (DOMINGO, 30 DE AGOSTO)
+            // LISTAGEM OFICIAL DA JORNADA CORRENTE REVISADA (AGOSTO 2026)
             baseJogos = [
                 { id: 1, categoria: 'hoje', data: strHoje, liga: 'Premier League', equipas: 'Manchester United vs Ipswich Town', dica: 'Vitória Man. United', odd: 1.38, top6: true },
-                { id: 2, categoria: 'hoje', data: strHoje, liga: 'Liga Portugal', equipas: 'Arouca vs Porto', dica: 'Mais de 2.5 Golos', odd: 1.68, top6: true },
-                { id: 3, categoria: 'amanha', data: strAmanha, liga: 'Liga Portugal', equipas: 'Estoril Praia vs Benfica', dica: 'Vitória Benfica', odd: 1.32, top6: true },
-                { id: 4, categoria: 'amanha', data: strAmanha, liga: 'Liga Portugal', equipas: 'Sporting vs Famalicão', dica: 'Vitória Sporting', odd: 1.25, top6: true },
-                { id: 5, categoria: 'fds', data: strSab, liga: 'La Liga', equipas: 'Real Madrid vs Málaga', dica: 'Real Madrid Handicap -1', odd: 1.60, top6: false },
-                { id: 6, categoria: 'fds', data: strDom, liga: 'Serie A', equipas: 'Juventus vs Parma', dica: 'Menos de 3.5 Golos', odd: 1.40, top6: false }
+                { id: 2, categoria: 'hoje', data: strHoje, liga: 'Liga Portugal', equipas: 'Arouca vs FC Porto', dica: 'Mais de 2.5 Golos', odd: 1.68, top6: true },
+                { id: 3, categoria: 'hoje', data: strHoje, liga: 'La Liga', equipas: 'Real Madrid vs Málaga', dica: 'Real Madrid Handicap -1', odd: 1.60, top6: true },
+                { id: 4, categoria: 'amanha', data: strAmanha, liga: 'Liga Portugal', equipas: 'Estoril Praia vs SL Benfica', dica: 'Vitória Benfica', odd: 1.32, top6: true },
+                { id: 5, categoria: 'amanha', data: strAmanha, liga: 'Liga Portugal', equipas: 'Sporting CP vs Famalicão', dica: 'Vitória Sporting', odd: 1.25, top6: true },
+                { id: 6, categoria: 'fds', data: strSab, liga: 'Liga Portugal', equipas: 'Braga vs Rio Ave', dica: 'Vitória Casa', odd: 1.50, top6: false },
+                { id: 7, categoria: 'fds', data: strDom, liga: 'Serie A', equipas: 'Juventus vs Parma', dica: 'Menos de 3.5 Golos', odd: 1.40, top6: false },
+                { id: 8, categoria: 'top6', data: strHoje, liga: 'Champions League', equipas: 'Bayern vs Real Madrid', dica: 'Ambas Marcam: Sim', odd: 1.58, top6: true }
             ];
             renderizarJogos('hoje');
         }
