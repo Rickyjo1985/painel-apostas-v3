@@ -1,12 +1,11 @@
-const PSW = "Rickyjo1985";
+const PSW = "SenhaSegura123";
 let apostas = JSON.parse(localStorage.getItem('banca_data')) || [];
 let fltCasa = "todas", idEdicao = null;
 
-const baseJogos = [
-    { id: 1, categoria: 'hoje', data: 'Sábado, 29 Ago', liga: 'Liga Portugal', equipas: 'Ac. Viseu vs FC Porto', dica: 'Vitória do FC Porto', odd: 1.45, top6: true },
-    { id: 2, categoria: 'hoje', data: 'Sábado, 29 Ago', liga: 'Premier League', equipas: 'Liverpool vs Nottingham Forest', dica: 'Mais de 2.5 Golos', odd: 1.55, top6: true },
-    { id: 4, categoria: 'amanha', data: 'Domingo, 30 Ago', liga: 'La Liga', equipas: 'Real Madrid vs Málaga', dica: 'Real Madrid -1', odd: 1.60, top6: true },
-    { id: 5, categoria: 'fds', data: 'Domingo, 30 Ago', liga: 'Premier League', equipas: 'Man. United vs Ipswich', dica: 'Vitória do Man. United', odd: 1.38, top6: true }
+let baseJogos = JSON.parse(localStorage.getItem('jogos_sugestoes')) || [
+    { id: 1, categoria: 'hoje', data: 'Domingo, 30 Ago', liga: 'La Liga', equipas: 'Real Madrid vs Málaga', dica: 'Real Madrid -1', odd: 1.60, top6: true },
+    { id: 2, categoria: 'hoje', data: 'Domingo, 30 Ago', liga: 'Premier League', equipas: 'Man. United vs Ipswich', dica: 'Vitória do Man. United', odd: 1.38, top6: true },
+    { id: 3, categoria: 'amanha', data: 'Segunda, 31 Ago', liga: 'Liga Portugal', equipas: 'Braga vs Rio Ave', dica: 'Mais de 2.5 Golos', odd: 1.65, top6: false }
 ];
 
 function verificarSenha() {
@@ -92,6 +91,39 @@ function recalcularOddModal() {
     document.getElementById("modal-total-odd").innerText = t.toFixed(2);
     document.getElementById("modal-total-retorno").innerText = `${(v * t).toFixed(2)} €`;
 }
+function mudarEstadoAposta(id, state) {
+    apostas = apostas.map(a => { if (a.id === id) a.estado = state; return a; });
+    localStorage.setItem('banca_data', JSON.stringify(apostas)); atualizarPainel();
+}
+
+function eliminarAposta(id) {
+    apostas = apostas.filter(a => a.id !== id); localStorage.setItem('banca_data', JSON.stringify(apostas)); atualizarPainel();
+}
+
+function filtrarPorCasa(c) {
+    fltCasa = c; document.querySelectorAll(".house-filters .btn-filter").forEach(b => b.classList.remove("active"));
+    document.getElementById(`filter-${c.toLowerCase()}`).classList.add("active"); atualizarPainel();
+}
+
+function abrirDetalhesAposta(id) {
+    idEdicao = id; const a = apostas.find(x => x.id === id); if (!a) return;
+    document.getElementById("modal-titulo").innerText = `🔎 Ajustar Boletim - ${a.casa}`;
+    document.getElementById("modal-banca-valor").value = a.valor;
+    const c = document.getElementById("modal-jogos-list"); c.innerHTML = "";
+    a.jogos.forEach(j => {
+        const d = document.createElement("div"); d.className = "multi-game-row"; d.style.margin = "10px 0";
+        d.innerHTML = `<input type="text" class="modal-input-nome" value="${j.nome}" required><input type="number" class="modal-input-odd" step="0.01" value="${j.odd}" style="width:75px;" oninput="recalcularOddModal()" required>`;
+        c.appendChild(d);
+    });
+    recalcularOddModal(); document.getElementById("detalhes-modal").style.display = "flex";
+}
+
+function recalcularOddModal() {
+    let t = 1, v = parseFloat(document.getElementById("modal-banca-valor").value) || 0;
+    document.querySelectorAll(".modal-input-odd").forEach(i => { t *= (parseFloat(i.value) || 1); });
+    document.getElementById("modal-total-odd").innerText = t.toFixed(2);
+    document.getElementById("modal-total-retorno").innerText = `${(v * t).toFixed(2)} €`;
+}
 function guardarEdicaoModal() {
     let sub = [], t = 1;
     document.querySelectorAll(".modal-input-nome").forEach((inp, idx) => {
@@ -107,6 +139,18 @@ function guardarEdicaoModal() {
 
 function fecharModal() { document.getElementById("detalhes-modal").style.display = "none"; }
 
+function criarJogoSugestao(e) {
+    e.preventDefault(); const cat = document.getElementById("g-cat").value;
+    const novo = {
+        id: Date.now(), categoria: cat, top6: cat === 'top6',
+        data: cat === 'hoje' ? 'Hoje' : (cat === 'amanha' ? 'Amanhã' : 'Fim de Semana'),
+        liga: document.getElementById("g-liga").value, equipas: document.getElementById("g-equi").value,
+        dica: document.getElementById("g-dica").value, odd: parseFloat(document.getElementById("g-odd").value)
+    };
+    baseJogos.push(novo); localStorage.setItem('jogos_sugestoes', JSON.stringify(baseJogos));
+    document.getElementById("game-editor-form").reset(); renderizarJogos(cat);
+}
+
 function atualizarPainel() {
     const tbody = document.getElementById("table-body"); tbody.innerHTML = "";
     let tInv = 0, lLiq = 0, pends = 0;
@@ -114,10 +158,9 @@ function atualizarPainel() {
         if (fltCasa !== "todas" && a.casa !== fltCasa) return;
         tInv += a.valor; let rb = a.valor * a.odd;
         if (a.estado === 'ganha') lLiq += (rb - a.valor); else if (a.estado === 'perdida') lLiq -= a.valor; else pends++;
-        
         const resumo = a.jogos && a.jogos.length > 1 ? `Múltipla (${a.jogos.length} Jogos)` : (a.jogos && a.jogos[0] ? a.jogos[0].nome : "Aposta");
         const tr = document.createElement("tr");
-        tr.innerHTML = `<td><b>${a.casa}</b><br><small>${a.tipo}</small></td><td><div style="max-width:260px;font-weight:bold;">${resumo}</div></td><td>${a.valor.toFixed(2)}€</td><td>${a.odd.toFixed(2)}</td><td>${rb.toFixed(2)}€</td><td><select class="table-select" onchange="mudarEstadoAposta(${a.id}, this.value)"><option value="pendente" ${a.estado==='pendente'?'selected':''}>Pendente</option><option value="ganha" ${a.estado==='ganha'?'selected':''}>Ganha</option><option value="perdida" ${a.estado==='perdida'?'selected':''}>Perdida</option></select></td><td><button class="btn-view" onclick="abrirDetalhesAposta(${a.id})">👁️ Detalhes</button><button class="btn-delete" onclick="eliminarAposta(${a.id})">×</button></td>`;
+        tr.innerHTML = `<td><b>${a.casa}</b><br><small>${a.tipo}</small></td><td><div style="max-width:260px;font-weight:bold;">${resumo}</div></td><td>${a.valor.toFixed(2)}€</td><td>${a.odd.toFixed(2)}</td><td>${rb.toFixed(2)}€</td><td><select class="table-select" onchange="mudarEstadoAposta(${a.id}, this.value)"><option value="pendente" ${a.estado==='pendente'?'selected':''}>Pendente</option><option value="ganha" ${a.estado==='ganha'?'selected':''}>Ganha</option><option value="perdida" ${a.estado==='perdida'?'selected':''}>Perdida</option></select></td><td><button class="btn-view" onclick="abrirDetalhesAposta(${a.id})">👁️</button><button class="btn-delete" onclick="eliminarAposta(${a.id})">×</button></td>`;
         tbody.appendChild(tr);
     });
     document.getElementById("stat-investido").innerText = `${tInv.toFixed(2)} €`;
