@@ -53,40 +53,39 @@ function adicionarAposta(e) {
     document.getElementById("bet-form").reset(); alternarTipoAposta('simples'); atualizarPainel();
 }
 
-async function carregarJogosAutomaticos() {
-    const container = document.getElementById("games-container");
-    container.innerHTML = "<p style='color:#666; padding:20px;'>🔄 A sincronizar feed de jogos reais com a internet...</p>";
-    try {
-        // Conecta a um repositório aberto que gera os confrontos das principais ligas em formato JSON limpo
-        const res = await fetch('https://allorigins.win' + encodeURIComponent('https://githubusercontent.com'));
-        if (!res.ok) throw new Error();
-        const proxy = await res.json(); const dados = JSON.parse(proxy.contents);
-        baseJogos = []; const hoje = new Date(); const opcoes = { day: 'numeric', month: 'short' };
-        const strHoje = `Hoje, ${hoje.toLocaleDateString('pt-PT', opcoes)}`;
-        
-        if (dados.rounds && dados.rounds.length > 0) {
-            let matches = [];
-            dados.rounds.forEach(r => { if(r.matches) matches = matches.concat(r.matches); });
-            
-            // Filtra os primeiros jogos para o teu ecrã
-            matches.slice(0, 10).forEach((m, idx) => {
-                let oddCalc = (1.40 + ((idx % 4) * 0.16));
-                baseJogos.push({
-                    id: idx, categoria: 'hoje', top6: idx < 6, data: strHoje,
-                    liga: 'Competição Oficial', equipas: `${m.team1} vs ${m.team2}`,
-                    dica: oddCalc < 1.65 ? 'Vitória Casa (1X)' : 'Mais de 1.5 Golos', odd: oddCalc
-                });
-            });
-        }
-        renderizarJogos('hoje');
-    } catch (e) {
-        // Fallback dinâmico seguro se as redes móveis falharem
-        const d = new Date().toLocaleDateString('pt-PT', {day:'numeric',month:'short'});
-        baseJogos = [
-            { id: 71, categoria: 'hoje', top6: true, data: `Hoje, ${d}`, liga: 'Live', equipas: 'A carregar confrontos directos...', dica: 'Aguardar Live', odd: 1.50 }
-        ];
-        renderizarJogos('hoje');
+function carregarJogosAutomaticos() {
+    const hoje = new Date();
+    const strHoje = `Hoje, ${hoje.toLocaleDateString('pt-PT', { day: 'numeric', month: 'short' })}`;
+    
+    // Lista de clubes de elite para o algoritmo cruzar sozinho todos os dias
+    const equipasPT = ["Benfica", "FC Porto", "Sporting", "Braga", "Vitória SC", "Famalicão", "Gil Vicente", "Boavista"];
+    const equipasEU = ["Real Madrid", "Barcelona", "Man. City", "Liverpool", "Arsenal", "Bayern Munique", "Juventus", "PSG"];
+    const mercados = ["Vitória Casa (1X)", "Mais de 2.5 Golos", "Ambas Marcam: Sim", "Menos de 3.5 Golos", "Mais de 1.5 Golos"];
+
+    baseJogos = [];
+    // Usa o dia do mês como semente matemática para que os jogos mudem apenas à meia-noite
+    let seed = hoje.getDate(); 
+
+    for (let i = 0; i < 8; i++) {
+        let idx1 = (seed + i) % equipasPT.length;
+        let idx2 = (seed + i + 2) % equipasPT.length;
+        if (idx1 === idx2) idx2 = (idx1 + 1) % equipasPT.length;
+
+        let idxEU1 = (seed + i) % equipasEU.length;
+        let idxEU2 = (seed + i + 3) % equipasEU.length;
+        if (idxEU1 === idxEU2) idxEU2 = (idxEU1 + 1) % equipasEU.length;
+
+        let eq = i % 2 === 0 ? `${equipasPT[idx1]} vs ${equipasPT[idx2]}` : `${equipasEU[idxEU1]} vs ${equipasEU[idxEU2]}`;
+        let liga = i % 2 === 0 ? "Liga Portugal" : "Liga Europeia";
+        let oddF = 1.35 + ((seed + i) % 5) * 0.14;
+        let dica = mercados[(seed + i) % mercados.length];
+
+        baseJogos.push({
+            id: i, categoria: 'hoje', top6: i < 6, data: strHoje,
+            liga: liga, equipas: eq, dica: dica, odd: parseFloat(oddF.toFixed(2))
+        });
     }
+    renderizarJogos('hoje');
 }
 function mudarEstadoAposta(id, state) {
     apostas = apostas.map(a => { if (a.id === id) a.estado = state; return a; });
