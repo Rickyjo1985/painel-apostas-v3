@@ -13,6 +13,8 @@
         .modal { display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.5); justify-content: center; align-items: center; }
         .modal-content { background: white; padding: 25px; border-radius: 12px; max-width: 500px; width: 90%; box-shadow: 0 4px 20px rgba(0,0,0,0.15); box-sizing: border-box; color: #1e1e24; }
         .modal-actions { display: flex; gap: 10px; margin-top: 20px; }
+        .notes-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 15px; margin-top: 15px; }
+        .note-card { background: #fff8e1; border-left: 5px solid #f59e0b; padding: 15px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); color: #1e1e24; }
     </style>
 </head>
 <body>
@@ -27,7 +29,7 @@
         <div style="float: right; margin-top: 5px;"><button onclick="sair()" class="btn-logout">Sair Seguro</button></div>
         <div class="main-nav">
             <button class="nav-link active" id="tab-gestor" onclick="mudarSeparador('gestor')">📈 Gestor de Apostas</button>
-            <button class="nav-link" id="tab-jogos" onclick="mudarSeparador('jogos')">📅 Jogos da Semana</button>
+            <button class="nav-link" id="tab-jogos" onclick="mudarSeparador('jogos')">📝 Diário e Notas de Jogos</button>
         </div>
         <div id="view-gestor">
             <div class="house-filters">
@@ -75,13 +77,26 @@
             </div>
         </div>
         <div id="view-jogos" style="display: none;">
-            <div class="game-filters" style="margin-top: 10px;">
-                <button class="btn-filter active" id="gfilter-hoje" onclick="filtrarJogos('hoje')">Hoje</button>
-                <button class="btn-filter" id="gfilter-amanha" onclick="filtrarJogos('amanha')">Amanhã</button>
-                <button class="btn-filter" id="gfilter-fds" onclick="filtrarJogos('fds')">Fim de Semana</button>
-                <button class="btn-filter" id="gfilter-top6" onclick="filtrarJogos('top6')">⭐ Top 6</button>
+            <div class="layout-grid">
+                <div class="form-section">
+                    <h3 style="margin-top: 0; color: var(--dark);">📝 Nova Anotação / Jogo</h3>
+                    <form id="note-form" onsubmit="adicionarNota(event)">
+                        <label>Data / Dia</label>
+                        <select id="note-data"><option value="Hoje">Hoje</option><option value="Amanhã">Amanhã</option><option value="Fim de Semana">Fim de Semana</option></select>
+                        <label>Confronto / Equipas</label>
+                        <input type="text" id="note-equipas" placeholder="Ex: Sporting vs Porto" required>
+                        <label>A tua Análise / Sugestão</label>
+                        <input type="text" id="note-texto" placeholder="Ex: Mais de 2.5 golos devido ao ataque..." required>
+                        <label>Cotação / Odd</label>
+                        <input type="number" id="note-odd" step="0.01" placeholder="Ex: 1.85" required>
+                        <button type="submit">Guardar no Diário</button>
+                    </form>
+                </div>
+                <div>
+                    <h3 style="margin-top: 0; color: var(--dark);">📅 O teu Diário Técnico</h3>
+                    <div class="notes-grid" id="notes-container"></div>
+                </div>
             </div>
-            <div class="games-grid" id="games-container"></div>
         </div>
     </div>
     <div id="detalhes-modal" class="modal">
@@ -102,14 +117,15 @@
     <script>
         const PSW = "SenhaSegura123";
         let apostas = JSON.parse(localStorage.getItem('banca_data')) || [];
-        let fltCasa = "todas", idEdicao = null, baseJogos = [];
+        let notas = JSON.parse(localStorage.getItem('diario_notas')) || [];
+        let fltCasa = "todas", idEdicao = null;
 
         function verificarSenha() {
             if (document.getElementById("password").value === PSW) {
                 document.getElementById("login-box").style.display = "none";
                 document.getElementById("private-dashboard").style.display = "block";
                 document.body.style.alignItems = "flex-start";
-                atualizarPainel(); carregarJogosAutomaticos();
+                atualizarPainel(); renderizarNotas();
             } else { document.getElementById("error-msg").innerText = "Senha Incorreta."; }
         }
 
@@ -119,7 +135,6 @@
             document.getElementById("view-gestor").style.display = tab === 'gestor' ? "block" : "none";
             document.getElementById("view-jogos").style.display = tab === 'jogos' ? "block" : "none";
         }
-
         function alternarTipoAposta(t) {
             const c = document.getElementById("jogos-formulario-container");
             document.getElementById("btn-add-jogo").style.display = t === 'simples' ? "none" : "block";
@@ -155,29 +170,33 @@
             localStorage.setItem('banca_data', JSON.stringify(apostas));
             document.getElementById("bet-form").reset(); alternarTipoAposta('simples'); atualizarPainel();
         }
-                function carregarJogosAutomaticos() {
-            const hoje = new Date(), amanha = new Date(); amanha.setDate(hoje.getDate() + 1);
-            const sabado = new Date(); sabado.setDate(hoje.getDate() + (6 - hoje.getDay()));
-            const domingo = new Date(); domingo.setDate(hoje.getDate() + (7 - hoje.getDay()));
-            const opcoes = { day: 'numeric', month: 'short' };
-            const strHoje = `Hoje, ${hoje.toLocaleDateString('pt-PT', opcoes)}`;
-            const strAmanha = `Amanhã, ${amanha.toLocaleDateString('pt-PT', opcoes)}`;
-            const strSab = `Sábado, ${sabado.toLocaleDateString('pt-PT', opcoes)}`;
-            const strDom = `Domingo, ${domingo.toLocaleDateString('pt-PT', opcoes)}`;
 
-            // JORNADA REAL VERDADEIRA DE AGRA (HOJE: 30 DE AGOSTO DE 2026)
-            baseJogos = [
-                { id: 1, categoria: 'hoje', data: strHoje, liga: 'Liga Portugal', equipas: 'Benfica vs Estrela da Amadora', dica: 'Vitória Benfica (Handicap -1)', odd: 1.35, top6: true },
-                { id: 2, categoria: 'hoje', data: strHoje, liga: 'Premier League', equipas: 'Manchester United vs Liverpool', dica: 'Mais de 2.5 Golos', odd: 1.55, top6: true },
-                { id: 3, categoria: 'hoje', data: strHoje, liga: 'La Liga', equipas: 'Real Madrid vs Real Betis', dica: 'Vitória Real Madrid', odd: 1.30, top6: true },
-                { id: 4, categoria: 'amanha', data: strAmanha, liga: 'Liga Portugal', equipas: 'Vitória SC vs Famalicão', dica: 'Ambas Marcam: Sim', odd: 1.85, top6: true },
-                { id: 5, categoria: 'fds', data: strSab, liga: 'Premier League', equipas: 'Manchester City vs Brentford', dica: 'Vitória Man. City', odd: 1.22, top6: false },
-                { id: 6, categoria: 'fds', data: strDom, liga: 'Serie A', equipas: 'Juventus vs AS Roma', dica: 'Menos de 2.5 Golos', odd: 1.65, top6: false },
-                { id: 7, categoria: 'top6', data: strHoje, liga: 'Liga Portugal', equipas: 'Braga vs Moreirense', dica: 'Vitória Braga', odd: 1.55, top6: true },
-                { id: 8, categoria: 'top6', data: strAmanha, liga: 'La Liga', equipas: 'Girona vs Barcelona', dica: 'Mais de 2.5 Golos', odd: 1.62, top6: true }
-            ];
-            renderizarJogos('hoje');
+        function adicionarNota(e) {
+            e.preventDefault();
+            const novaNota = {
+                id: Date.now(),
+                data: document.getElementById("note-data").value,
+                equipas: document.getElementById("note-equipas").value,
+                texto: document.getElementById("note-texto").value,
+                odd: parseFloat(document.getElementById("note-odd").value) || 1
+            };
+            notas.push(novaNota); localStorage.setItem('diario_notas', JSON.stringify(notas));
+            document.getElementById("note-form").reset(); renderizarNotas();
         }
+
+        function eliminarNota(id) {
+            notas = notas.filter(n => n.id !== id); localStorage.setItem('diario_notas', JSON.stringify(notas)); renderizarNotas();
+        }
+
+        function renderizarNotas() {
+            const c = document.getElementById("notes-container"); c.innerHTML = "";
+            notas.forEach(n => {
+                const div = document.createElement("div"); div.className = "note-card";
+                div.innerHTML = `<div><small>📅 <b>${n.data}</b></small><h4 style="margin:5px 0;">${n.equipas}</h4><p style="margin:5px 0;font-size:14px;color:#4a5568;">${n.texto}</p><span style="background:var(--primary);color:white;padding:2px 6px;font-size:11px;border-radius:4px;font-weight:bold;">Odd: ${n.odd.toFixed(2)}</span></div><button onclick="eliminarNota(${n.id})" style="background:none;border:none;color:red;cursor:pointer;float:right;font-weight:bold;margin-top:-15px;">×</button>`;
+                c.appendChild(div);
+            });
+        }
+
         function mudarEstadoAposta(id, state) {
             apostas = apostas.map(a => { if (a.id === id) a.estado = state; return a; });
             localStorage.setItem('banca_data', JSON.stringify(apostas)); atualizarPainel();
@@ -246,39 +265,6 @@
             let pct = Math.max(0, Math.min(100, (lLiq / 500) * 100));
             document.getElementById("chart-fill").style.width = `${pct}%`;
             document.getElementById("chart-text").innerText = `${pct.toFixed(0)}% (${lLiq.toFixed(2)}€ / 500€)`;
-        }
-
-        function filtrarJogos(cat) {
-            document.querySelectorAll(".game-filters .btn-filter").forEach(b => b.classList.remove("active"));
-            document.getElementById(`gfilter-${cat}`).classList.add("active"); renderizarJogos(cat);
-        }
-
-        function renderizarJogos(flt) {
-            const c = document.getElementById("games-container"); c.innerHTML = "";
-            baseJogos.forEach(j => {
-                if (flt === 'top6' && !j.top6) return; if (flt !== 'top6' && j.categoria !== flt) return;
-                const card = document.createElement("div"); card.className = `game-card ${j.top6 ? 'top6' : ''}`;
-                card.innerHTML = `<div><div class="game-meta"><span>⚽ ${j.liga}</span><span>${j.data}</span></div><div class="game-title">${j.equipas}</div><div class="suggestion-box"><small>🎯 Sugestão:</small><div style="font-weight:bold;margin:2px 0;">${j.dica}</div><span>Odd: ${j.odd.toFixed(2)}</span></div></div><button class="btn-import" onclick="importarParaFormulario('${j.equipas} (${j.dica})', ${j.odd})">⚡ Importar</button>`;
-                c.appendChild(card);
-            });
-        }
-
-        function importarParaFormulario(ev, o) {
-            mudarSeparador('gestor');
-            if (document.getElementById("form-tipo").value === 'simples') {
-                document.querySelector(".input-evento").value = ev; document.querySelector(".input-odd").value = o;
-            } else {
-                const rows = document.querySelectorAll(".multi-game-row"); let p = false;
-                for (let i = 0; i < rows.length; i++) {
-                    const eInp = rows[i].querySelector(".input-evento"); const oInp = rows[i].querySelector(".input-odd");
-                    if (!eInp.value) { eInp.value = ev; oInp.value = o; p = true; break; }
-                }
-                if (!p) {
-                    adicionarLinhaJogoForm(); const r = document.querySelectorAll(".multi-game-row");
-                    r[r.length - 1].querySelector(".input-evento").value = ev; r[r.length - 1].querySelector(".input-odd").value = o;
-                }
-            }
-            calcularOddTotalMultipla(); document.getElementById("form-valor").focus();
         }
 
         function sair() {
