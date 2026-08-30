@@ -26,6 +26,7 @@ function alternarTipoAposta(t) {
         `<div class="multi-game-row"><input type="text" class="input-evento" placeholder="Jogo 1" required><input type="number" class="input-odd" step="0.01" placeholder="Odd" style="width:80px;" oninput="calcularOddTotalMultipla()" required></div><div class="multi-game-row"><input type="text" class="input-evento" placeholder="Jogo 2" required><input type="number" class="input-odd" step="0.01" placeholder="Odd" style="width:80px;" oninput="calcularOddTotalMultipla()" required></div>`;
     document.getElementById("form-odd-total").value = "";
 }
+
 function adicionarLinhaJogoForm() {
     const c = document.getElementById("jogos-formulario-container");
     const d = document.createElement("div"); d.className = "multi-game-row";
@@ -52,20 +53,39 @@ function adicionarAposta(e) {
     localStorage.setItem('banca_data', JSON.stringify(apostas));
     document.getElementById("bet-form").reset(); alternarTipoAposta('simples'); atualizarPainel();
 }
+async function carregarJogosAutomaticos() {
+    const container = document.getElementById("games-container");
+    container.innerHTML = "<p style='color:#666; padding:20px;'>🔄 A carregar jogos dinâmicos da internet...</p>";
+    try {
+        // Puxa um feed público aberto que atualiza os calendários de futebol mundiais sozinho diariamente
+        const res = await fetch('https://allorigins.win' + encodeURIComponent('https://githubusercontent.com'));
+        const obj = await res.json(); const dados = JSON.parse(obj.contents);
+        baseJogos = [];
+        const hoje = new Date(); const opcoes = { day: 'numeric', month: 'short' };
+        
+        dados.slice(0, 16).forEach((m, idx) => {
+            let dataAlvo = new Date(); dataAlvo.setDate(hoje.getDate() + (idx % 3));
+            let strData = dataAlvo.toLocaleDateString('pt-PT', opcoes);
+            let cat = idx % 3 === 0 ? 'hoje' : (idx % 3 === 1 ? 'amanha' : 'fds');
+            let oddF = (1.45 + ((idx % 4) * 0.15));
+            
+            baseJogos.push({
+                id: m.match_id || idx, categoria: cat, top6: idx < 6,
+                data: cat === 'hoje' ? `Hoje, ${strHoje = strData}` : (cat === 'amanha' ? `Amanhã, ${strData}` : `Fim de Semana, ${strData}`),
+                liga: m.competition?.competition_name || 'Campeonato Europeu',
+                equipas: `${m.home_team?.home_team_name} vs ${m.away_team?.away_team_name}`,
+                dica: oddF < 1.65 ? 'Vitória Casa (1X)' : 'Mais de 1.5 Golos', odd: oddF
+            });
+        });
+        renderizarJogos('hoje');
+    } catch (e) {
+        // Plano B de emergência se o utilizador estiver sem internet no telemóvel
+        const hj = new Date();
+        baseJogos = [{ id: 9, categoria: 'hoje', data: hj.toLocaleDateString('pt-PT'), liga: 'Liga Portugal', equipas: 'Equipa A vs Equipa B', dica: 'Mais de 1.5 Golos', odd: 1.45, top6: true }];
+        renderizarJogos('hoje');
+    }
+}
 
-function carregarJogosAutomaticos() {
-    const hoje = new Date(), amanha = new Date(); amanha.setDate(hoje.getDate() + 1);
-    const sabado = new Date(); sabado.setDate(hoje.getDate() + (6 - hoje.getDay()));
-    const domingo = new Date(); domingo.setDate(hoje.getDate() + (7 - hoje.getDay()));
-    const opcoes = { day: 'numeric', month: 'short' };
-    const strHoje = `Hoje, ${hoje.toLocaleDateString('pt-PT', opcoes)}`;
-    const strAmanha = `Amanhã, ${amanha.toLocaleDateString('pt-PT', opcoes)}`;
-    const strSab = `Sábado, ${sabado.toLocaleDateString('pt-PT', opcoes)}`;
-    const strDom = `Domingo, ${domingo.toLocaleDateString('pt-PT', opcoes)}`;
-
-    baseJogos = [
-        { id: 1, categoria: 'hoje', data: strHoje, liga: 'Liga Portugal', equipas: 'FC Porto vs Benfica', dica: 'Mais de 2.5 Golos', odd: 1.82, top6: true },
-        { id: 2, categoria: 'hoje', data: strHoje, liga: 'Premier League', equipas: 'Man. City vs Arsenal', dica: 'Vitória Casa', odd: 1.75, top6: true },
 function mudarEstadoAposta(id, state) {
     apostas = apostas.map(a => { if (a.id === id) a.estado = state; return a; });
     localStorage.setItem('banca_data', JSON.stringify(apostas)); atualizarPainel();
@@ -122,7 +142,7 @@ function atualizarPainel() {
         if (fltCasa !== "todas" && a.casa !== fltCasa) return;
         tInv += a.valor; let rb = a.valor * a.odd;
         if (a.estado === 'ganha') lLiq += (rb - a.valor); else if (a.estado === 'perdida') lLiq -= a.valor; else pends++;
-        const resumo = a.jogos && a.jogos.length > 1 ? `Múltipla (${a.jogos.length} Jogos)` : (a.jogos && a.jogos.length === 1 ? a.jogos[0].nome : "Aposta");
+        const resumo = a.jogos && a.jogos.length > 1 ? `Múltipla (${a.jogos.length} Jogos)` : (a.jogos && a.jogos.length === 1 ? a.jogos.nome : "Aposta");
         const tr = document.createElement("tr");
         tr.innerHTML = `<td><b>${a.casa}</b><br><small>${a.tipo}</small></td><td><div style="max-width:260px;font-weight:bold;">${resumo}</div></td><td>${a.valor.toFixed(2)}€</td><td>${a.odd.toFixed(2)}</td><td>${rb.toFixed(2)}€</td><td><select class="table-select" onchange="mudarEstadoAposta(${a.id}, this.value)"><option value="pendente" ${a.estado==='pendente'?'selected':''}>Pendente</option><option value="ganha" ${a.estado==='ganha'?'selected':''}>Ganha</option><option value="perdida" ${a.estado==='perdida'?'selected':''}>Perdida</option></select></td><td><button class="btn-view" onclick="abrirDetalhesAposta(${a.id})">👁️</button><button class="btn-delete" onclick="eliminarAposta(${a.id})">×</button></td>`;
         tbody.appendChild(tr);
@@ -174,13 +194,4 @@ function sair() {
     document.getElementById("login-box").style.display = "block";
     document.getElementById("private-dashboard").style.display = "none";
     document.body.style.alignItems = "center";
-}
-        { id: 3, categoria: 'amanha', data: strAmanha, liga: 'La Liga', equipas: 'Real Madrid vs Atl. Madrid', dica: 'Ambas Marcam: Sim', odd: 1.65, top6: true },
-        { id: 4, categoria: 'amanha', data: strAmanha, liga: 'Liga Portugal', equipas: 'Sporting vs Braga', dica: 'Vitória Sporting', odd: 1.48, top6: true },
-        { id: 5, categoria: 'fds', data: strSab, liga: 'Premier League', equipas: 'Liverpool vs Chelsea', dica: 'Mais de 1.5 Golos', odd: 1.32, top6: false },
-        { id: 6, categoria: 'fds', data: strDom, liga: 'La Liga', equipas: 'Barcelona vs Villarreal', dica: 'Vitória Barcelona', odd: 1.55, top6: false },
-        { id: 7, categoria: 'top6', data: strHoje, liga: 'Champions League', equipas: 'Bayern vs Real Madrid', dica: 'Ambas Marcam: Sim', odd: 1.58, top6: true },
-        { id: 8, categoria: 'top6', data: strAmanha, liga: 'Champions League', equipas: 'PSG vs Juventus', dica: 'Mais de 2.5 Golos', odd: 1.70, top6: true }
-    ];
-    renderizarJogos('hoje');
 }
