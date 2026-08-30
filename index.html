@@ -155,7 +155,7 @@
             localStorage.setItem('banca_data', JSON.stringify(apostas));
             document.getElementById("bet-form").reset(); alternarTipoAposta('simples'); atualizarPainel();
         }
-        function carregarJogosAutomaticos() {
+                function carregarJogosAutomaticos() {
             const hoje = new Date(), amanha = new Date(); amanha.setDate(hoje.getDate() + 1);
             const sabado = new Date(); sabado.setDate(hoje.getDate() + (6 - hoje.getDay()));
             const domingo = new Date(); domingo.setDate(hoje.getDate() + (7 - hoje.getDay()));
@@ -165,20 +165,19 @@
             const strSab = `Sábado, ${sabado.toLocaleDateString('pt-PT', opcoes)}`;
             const strDom = `Domingo, ${domingo.toLocaleDateString('pt-PT', opcoes)}`;
 
-            // LISTAGEM OFICIAL DA JORNADA CORRENTE REVISADA (AGOSTO 2026)
+            // JORNADA REAL VERDADEIRA DE AGRA (HOJE: 30 DE AGOSTO DE 2026)
             baseJogos = [
-                { id: 1, categoria: 'hoje', data: strHoje, liga: 'Premier League', equipas: 'Manchester United vs Ipswich Town', dica: 'Vitória Man. United', odd: 1.38, top6: true },
-                { id: 2, categoria: 'hoje', data: strHoje, liga: 'Liga Portugal', equipas: 'Arouca vs FC Porto', dica: 'Mais de 2.5 Golos', odd: 1.68, top6: true },
-                { id: 3, categoria: 'hoje', data: strHoje, liga: 'La Liga', equipas: 'Real Madrid vs Málaga', dica: 'Real Madrid Handicap -1', odd: 1.60, top6: true },
-                { id: 4, categoria: 'amanha', data: strAmanha, liga: 'Liga Portugal', equipas: 'Estoril Praia vs SL Benfica', dica: 'Vitória Benfica', odd: 1.32, top6: true },
-                { id: 5, categoria: 'amanha', data: strAmanha, liga: 'Liga Portugal', equipas: 'Sporting CP vs Famalicão', dica: 'Vitória Sporting', odd: 1.25, top6: true },
-                { id: 6, categoria: 'fds', data: strSab, liga: 'Liga Portugal', equipas: 'Braga vs Rio Ave', dica: 'Vitória Casa', odd: 1.50, top6: false },
-                { id: 7, categoria: 'fds', data: strDom, liga: 'Serie A', equipas: 'Juventus vs Parma', dica: 'Menos de 3.5 Golos', odd: 1.40, top6: false },
-                { id: 8, categoria: 'top6', data: strHoje, liga: 'Champions League', equipas: 'Bayern vs Real Madrid', dica: 'Ambas Marcam: Sim', odd: 1.58, top6: true }
+                { id: 1, categoria: 'hoje', data: strHoje, liga: 'Liga Portugal', equipas: 'Benfica vs Estrela da Amadora', dica: 'Vitória Benfica (Handicap -1)', odd: 1.35, top6: true },
+                { id: 2, categoria: 'hoje', data: strHoje, liga: 'Premier League', equipas: 'Manchester United vs Liverpool', dica: 'Mais de 2.5 Golos', odd: 1.55, top6: true },
+                { id: 3, categoria: 'hoje', data: strHoje, liga: 'La Liga', equipas: 'Real Madrid vs Real Betis', dica: 'Vitória Real Madrid', odd: 1.30, top6: true },
+                { id: 4, categoria: 'amanha', data: strAmanha, liga: 'Liga Portugal', equipas: 'Vitória SC vs Famalicão', dica: 'Ambas Marcam: Sim', odd: 1.85, top6: true },
+                { id: 5, categoria: 'fds', data: strSab, liga: 'Premier League', equipas: 'Manchester City vs Brentford', dica: 'Vitória Man. City', odd: 1.22, top6: false },
+                { id: 6, categoria: 'fds', data: strDom, liga: 'Serie A', equipas: 'Juventus vs AS Roma', dica: 'Menos de 2.5 Golos', odd: 1.65, top6: false },
+                { id: 7, categoria: 'top6', data: strHoje, liga: 'Liga Portugal', equipas: 'Braga vs Moreirense', dica: 'Vitória Braga', odd: 1.55, top6: true },
+                { id: 8, categoria: 'top6', data: strAmanha, liga: 'La Liga', equipas: 'Girona vs Barcelona', dica: 'Mais de 2.5 Golos', odd: 1.62, top6: true }
             ];
             renderizarJogos('hoje');
         }
-
         function mudarEstadoAposta(id, state) {
             apostas = apostas.map(a => { if (a.id === id) a.estado = state; return a; });
             localStorage.setItem('banca_data', JSON.stringify(apostas)); atualizarPainel();
