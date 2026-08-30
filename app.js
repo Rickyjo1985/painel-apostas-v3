@@ -81,6 +81,20 @@ function carregarJogosAutomaticos() {
 
     renderizarJogos('hoje');
 }
+function mudarEstadoAposta(id, state) {
+    apostas = apostas.map(a => { if (a.id === id) a.estado = state; return a; });
+    localStorage.setItem('banca_data', JSON.stringify(apostas)); atualizarPainel();
+}
+
+function eliminarAposta(id) {
+    apostas = apostas.filter(a => a.id !== id); localStorage.setItem('banca_data', JSON.stringify(apostas)); atualizarPainel();
+}
+
+function filtrarPorCasa(c) {
+    fltCasa = c; document.querySelectorAll(".house-filters .btn-filter").forEach(b => b.classList.remove("active"));
+    document.getElementById(`filter-${c.toLowerCase()}`).classList.add("active"); atualizarPainel();
+}
+
  catch (e) {
         // Plano B de emergência se o utilizador estiver sem internet no telemóvel
         const hj = new Date();
