@@ -98,3 +98,10 @@ A V1.3 usa API-Football como fonte de dados e ordena os jogos por um score próp
 - O cache é invalidado com `?force=1`, evitando ficar preso a respostas vazias antigas.
 - A interface mostra forma casa/fora, +1.5, H2H, probabilidades 1X2, posição na tabela e médias de golos quando disponíveis.
 - A explicação de cada sugestão é construída a partir dos números reais disponíveis, sem inventar estatísticas.
+
+
+## V1.4.6
+- O TOP 5 deixa de ser bloqueado por um `MIN_SCORE` rígido.
+- Os candidatos analisados são sempre ordenados por Score; a qualidade dos dados continua visível.
+- A resposta distingue candidatos encontrados de candidatos efectivamente processados.
+- Cada jogo expõe os pontos de dados usados (histórico, H2H, Prediction e classificação).
