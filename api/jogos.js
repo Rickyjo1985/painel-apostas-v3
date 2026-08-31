@@ -244,7 +244,6 @@ function buildMarkets(h,a,h2,p){
       reason:"A previsão disponível e a forma recente dão vantagem à equipa visitante."}
   ];
 
-  const dataN=h.n+a.n+h2.n;
   const evidenceCap = dataN>=12 ? 96 : dataN>=6 ? 90 : dataN>=2 ? 82 : 72;
   markets.forEach(m => { m.confidence = Math.round(clamp(Math.min(m.confidence, evidenceCap))); });
   return markets.sort((x,y)=>y.confidence-x.confidence);
