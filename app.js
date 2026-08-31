@@ -220,9 +220,14 @@ function renderizarJogos() {
         </div>
         <div class="analysis-mini">
           <span>📈 Forma ${j.metrics?.form ?? "—"}</span>
-          <span>⚽ Golos ${j.metrics?.goals ?? "—"}</span>
+          <span>⚽ +1.5 ${j.metrics?.goals ?? "—"}</span>
           <span>🤝 H2H ${j.metrics?.h2h ?? "—"}</span>
           <span>🤖 API ${j.metrics?.prediction ?? "—"}</span>
+          <span>🏆 Tabela ${j.metrics?.table ?? "—"}</span>
+        </div>
+        <div class="evidence-detail">
+          ${j.evidence?.homeGF != null || j.evidence?.awayGF != null ? `<span>⚽ Média golos: ${j.evidence.homeGF != null ? j.evidence.homeGF.toFixed(2) : "—"} / ${j.evidence.awayGF != null ? j.evidence.awayGF.toFixed(2) : "—"}</span>` : ""}
+          ${j.evidence?.homeBTTS != null || j.evidence?.awayBTTS != null ? `<span>🎯 BTTS: ${j.evidence.homeBTTS != null ? Math.round(j.evidence.homeBTTS) : "—"}% / ${j.evidence.awayBTTS != null ? Math.round(j.evidence.awayBTTS) : "—"}%</span>` : ""}
         </div>
         <div class="calibration-note">${calibration}</div>
         ${alternatives.length ? `<div class="alternatives"><small>Outras leituras</small>${alternatives.map(s => `<div>• ${escapeHtml(s.label)} <b>${Math.round(s.confidence)}%</b></div>`).join("")}</div>` : ""}
