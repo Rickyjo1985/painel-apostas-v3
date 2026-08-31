@@ -95,7 +95,7 @@ async function carregarMelhoresJogos(force = false) {
     status.className = "games-status success";
     status.innerText = baseJogos.length
       ? `Foram seleccionadas ${baseJogos.length} das melhores oportunidades do dia. A confiança é uma estimativa estatística, não uma garantia.`
-      : ((data.analyzed || 0) > 0 ? "Os jogos de hoje foram analisados, mas nenhum atingiu o nível mínimo do modelo." : "Não foram encontrados jogos pré-jogo nas competições disponíveis.");
+      : ((data.analyzed || 0) > 0 ? "Os jogos foram analisados e ordenados pelo Score. O modelo mostra os melhores disponíveis, mesmo quando os dados são moderados." : "Não foram encontrados jogos pré-jogo nas competições disponíveis.");
     renderizarJogos();
   } catch (err) {
     console.error(err);
