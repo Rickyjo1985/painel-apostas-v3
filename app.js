@@ -77,11 +77,11 @@ async function carregarMelhoresJogos(force = false) {
     const data = await response.json();
     if (!response.ok) throw new Error(data.error || "Não foi possível obter os jogos.");
     baseJogos = data.games || [];
-    document.getElementById("games-date").innerText = `${data.dateLabel || "Hoje"} · ${data.analyzed || 0} jogos analisados`;
+    document.getElementById("games-date").innerText = `${data.dateLabel || "Hoje"} · ${data.analyzed || 0} jogos analisados · ${data.selected ?? (data.games || []).length} oportunidades`;
     status.className = "games-status success";
     status.innerText = baseJogos.length
       ? `Foram seleccionadas ${baseJogos.length} das melhores oportunidades do dia.`
-      : "Não há oportunidades com evidência mínima suficiente neste momento.";
+      : ((data.analyzed || 0) > 0 ? "Os jogos de hoje foram analisados, mas nenhum atingiu o nível mínimo do modelo." : "Não foram encontrados jogos pré-jogo nas competições disponíveis.");
     renderizarJogos();
   } catch (err) {
     console.error(err);
