@@ -134,10 +134,25 @@ function predictionData(row){
   const goals=x.goals || {};
   const winner=x.winner || {};
 
+  let home=percent(percentObj.home);
+  let draw=percent(percentObj.draw);
+  let away=percent(percentObj.away);
+
+  // A API pode devolver percentagens incompletas/não normalizadas.
+  // Normalizamos apenas quando temos os três valores para evitar
+  // transformar "50/50/50" numa falsa confiança de 100%.
+  const probs=[home,draw,away];
+  if(probs.every(v=>v!=null)){
+    const sum=probs.reduce((s,v)=>s+v,0);
+    if(sum>0 && (sum>100.5 || sum<99.5)){
+      home=home/sum*100;
+      draw=draw/sum*100;
+      away=away/sum*100;
+    }
+  }
+
   return {
-    home:percent(percentObj.home),
-    draw:percent(percentObj.draw),
-    away:percent(percentObj.away),
+    home, draw, away,
     over:typeof x.under_over==="string" ? /over/i.test(x.under_over) : null,
     underOver:x.under_over || null,
     advice:x.advice||null,
@@ -197,11 +212,20 @@ function buildMarkets(h,a,h2,p){
       ? Math.min(p.homeGoals,p.awayGoals)*70 : 50,0,100)
   );
 
-  const home=clamp(p.home ?? pct(h.wins) ?? 50);
-  const away=clamp(p.away ?? pct(a.wins) ?? 50);
-  const draw=clamp(p.draw ?? 25);
-  const home1x=clamp(home+draw);
-  const awayX2=clamp(away+draw);
+  // Confiança é uma estimativa de evidência, não uma garantia.
+  // Sem previsão real, não usamos 50% artificiais como se fossem probabilidade.
+  const formHome=pct(h.wins), formAway=pct(a.wins);
+  const home=clamp(p.home!=null ? p.home : (formHome!=null ? formHome : 50));
+  const away=clamp(p.away!=null ? p.away : (formAway!=null ? formAway : 50));
+  const draw=clamp(p.draw!=null ? p.draw : 25);
+
+  // As duplas possibilidades só podem chegar a 100 quando a evidência
+  // combinada realmente o justificar. Com dados fracos, aplicamos uma
+  // penalização de qualidade para evitar falsas certezas.
+  const dataN=h.n+a.n+h2.n;
+  const qualityFactor = dataN>=12 ? 1 : dataN>=6 ? 0.92 : dataN>=2 ? 0.82 : 0.72;
+  const home1x=clamp((home+draw)*qualityFactor);
+  const awayX2=clamp((away+draw)*qualityFactor);
 
   const markets=[
     {market:"over15",label:"Mais de 1,5 golos",confidence:over15,
@@ -220,6 +244,9 @@ function buildMarkets(h,a,h2,p){
       reason:"A previsão disponível e a forma recente dão vantagem à equipa visitante."}
   ];
 
+  const dataN=h.n+a.n+h2.n;
+  const evidenceCap = dataN>=12 ? 96 : dataN>=6 ? 90 : dataN>=2 ? 82 : 72;
+  markets.forEach(m => { m.confidence = Math.round(clamp(Math.min(m.confidence, evidenceCap))); });
   return markets.sort((x,y)=>y.confidence-x.confidence);
 }
 
