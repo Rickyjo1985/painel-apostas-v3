@@ -297,7 +297,7 @@ function renderizarCalibracao() {
     </div>`;
 }
 
-function jsQuote(s) { return s.replace(/\\/g, "\\\\").replace(/'/g, "\\'").replace(/\n/g, " "); }
+function jsQuote(s) { return String(s ?? "").replace(/\\/g, "\\\\").replace(/'/g, "\\'").replace(/\n/g, " "); }
 function escapeHtml(value) {
   return String(value ?? "").replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
 }
