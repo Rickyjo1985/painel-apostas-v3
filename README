@@ -85,3 +85,16 @@ A V1.3 usa API-Football como fonte de dados e ordena os jogos por um score próp
 ## V1.4.3 — correcção
 - Corrigida a função `clamp` em `app.js`, que era usada pela calibração mas não estava definida no frontend.
 - Mantida a calibração do Score e do histórico.
+
+
+## V1.4.4
+- Corrigido erro `s.replace is not a function` no helper `jsQuote`: IDs numéricos agora são convertidos para texto antes de escapar para atributos HTML.
+
+
+## V1.4.5 — dados reais e explicação numérica
+- Usa `/fixtures?team=ID&last=10` para forma recente, conforme a API-Football.
+- Usa `/standings?league=ID&season=SEASON` uma vez por competição para posição/formação de tabela.
+- Usa `/fixtures/headtohead` e `/predictions` por jogo.
+- O cache é invalidado com `?force=1`, evitando ficar preso a respostas vazias antigas.
+- A interface mostra forma casa/fora, +1.5, H2H, probabilidades 1X2, posição na tabela e médias de golos quando disponíveis.
+- A explicação de cada sugestão é construída a partir dos números reais disponíveis, sem inventar estatísticas.
