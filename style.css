@@ -87,3 +87,6 @@ select.table-select{width:auto;padding:4px 8px;margin:0;font-size:13px;display:i
   .ct-head,.ct-row{grid-template-columns:1.7fr .6fr .7fr 1fr;font-size:11px}
   .card-actions{width:100%}.card-actions button{flex:1}
 }
+
+.evidence-detail{display:flex;flex-wrap:wrap;gap:6px;margin-top:7px;font-size:11px;color:#53627a}
+.evidence-detail span{background:#f6f8fb;border:1px solid #e5eaf1;border-radius:8px;padding:4px 7px}
