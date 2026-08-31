@@ -80,3 +80,8 @@ A V1.3 usa API-Football como fonte de dados e ordena os jogos por um score próp
 - Mercados de dupla possibilidade recebem penalização quando há pouca evidência.
 - Existe um limite de confiança dependente da quantidade de dados disponíveis.
 - A interface deixa de chamar dados médios de "dados suficientes" e passa a "dados razoáveis".
+
+
+## V1.4.3 — correcção
+- Corrigida a função `clamp` em `app.js`, que era usada pela calibração mas não estava definida no frontend.
+- Mantida a calibração do Score e do histórico.
