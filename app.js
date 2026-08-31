@@ -75,8 +75,19 @@ async function carregarMelhoresJogos(force = false) {
   if (btn) btn.disabled = true;
   try {
     const q = force ? "?force=1" : "";
-    const response = await fetch(`/api/jogos${q}`, { cache: force ? "no-store" : "default" });
-    const data = await response.json();
+    const response = await fetch(`/api/jogos${q}`, { cache: "no-store" });
+    const raw = await response.text();
+    let data;
+    try {
+      data = raw ? JSON.parse(raw) : {};
+    } catch {
+      const short = String(raw || "Resposta vazia do servidor.")
+        .replace(/<[^>]*>/g, " ")
+        .replace(/\\s+/g, " ")
+        .trim()
+        .slice(0, 240);
+      throw new Error(`O servidor não devolveu JSON. ${short}`);
+    }
     if (!response.ok) throw new Error(data.error || "Não foi possível obter os jogos.");
     baseJogos = calibrarJogos(data.games || []);
     document.getElementById("games-date").innerText = `${data.dateLabel || "Hoje"} · ${data.analyzed || 0} jogos analisados · ${data.selected ?? (data.games || []).length} oportunidades`;
