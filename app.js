@@ -2,7 +2,7 @@ const PSW = "Rickyjo1985";
 let apostas = JSON.parse(localStorage.getItem('banca_data')) || [];
 let fltCasa = "todas", idEdicao = null, baseJogos = [];
 
-const MIN_SCORE = 65;
+const MIN_SCORE = 60;
 const TOP_LIMIT = 8;
 
 function verificarSenha() {
@@ -80,8 +80,8 @@ async function carregarMelhoresJogos(force = false) {
     document.getElementById("games-date").innerText = `${data.dateLabel || "Hoje"} · ${data.analyzed || 0} jogos analisados`;
     status.className = "games-status success";
     status.innerText = baseJogos.length
-      ? `Foram seleccionadas ${baseJogos.length} oportunidades com score ≥ ${MIN_SCORE}.`
-      : "Não foram encontradas oportunidades suficientes para hoje. Isto é normal quando há poucos jogos ou poucos dados.";
+      ? `Foram seleccionadas ${baseJogos.length} das melhores oportunidades do dia.`
+      : "Não há oportunidades com evidência mínima suficiente neste momento.";
     renderizarJogos();
   } catch (err) {
     console.error(err);
@@ -114,6 +114,12 @@ function renderizarJogos() {
           <small>🎯 Sugestão principal</small>
           <div class="main-suggestion">${escapeHtml(j.suggestion.label)}</div>
           <div class="reason">${escapeHtml(j.suggestion.reason)}</div>
+        </div>
+        <div class="analysis-mini">
+          <span>📈 Forma ${j.metrics?.form ?? "—"}</span>
+          <span>⚽ Golos ${j.metrics?.goals ?? "—"}</span>
+          <span>🤝 H2H ${j.metrics?.h2h ?? "—"}</span>
+          <span>🤖 API ${j.metrics?.prediction ?? "—"}</span>
         </div>
         ${alternatives.length ? `<div class="alternatives"><small>Outras leituras</small>${alternatives.map(s => `<div>• ${escapeHtml(s.label)} <b>${Math.round(s.confidence)}%</b></div>`).join("")}</div>` : ""}
       </div>
