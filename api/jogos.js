@@ -1,7 +1,6 @@
 
 const CACHE_TTL_MS = 30 * 60 * 1000;
 const TOP_LIMIT = 5;
-const MIN_SCORE = 55;
 const MAX_CANDIDATES = 8;
 const cache = globalThis.__footballCache || (globalThis.__footballCache = new Map());
 
@@ -210,10 +209,12 @@ export default async function handler(req,res){
       const candidates=upcoming.map(f=>({f,league:leagueInfo(f)})).filter(x=>x.league)
         .sort((a,b)=>(b.league.weight-a.league.weight)||(new Date(a.f.fixture.date)-new Date(b.f.fixture.date))).slice(0,MAX_CANDIDATES);
       const out=[],failures=[];
+      let analyzedCount=0;
       // Standings are fetched once per competition/season and reused for both teams.
       const standingCache=new Map();
       for(const {f,league} of candidates){
         try{
+          analyzedCount++;
           const hid=f.teams.home.id,aid=f.teams.away.id;
           const sk=`${f.league.id}:${f.league.season}`;
           let standings=[];
@@ -232,13 +233,12 @@ export default async function handler(req,res){
           const sh=sm.get(Number(hid))||null,sa=sm.get(Number(aid))||null;
           const markets=buildMarkets(h,a,h2,p);
           const score=scoreGame(h,a,h2,p,sh,sa,league.weight);
-          if(score<MIN_SCORE)continue;
           const best={...markets[0],reason:marketReason(markets[0].label,h,a,h2,p,sh,sa)};
           const suggestions=markets.slice(0,4).map(m=>({...m,reason:marketReason(m.label,h,a,h2,p,sh,sa)}));
           out.push({
             id:f.fixture.id,home:f.teams.home.name,away:f.teams.away.name,league:league.name,
             time:new Intl.DateTimeFormat("pt-PT",{timeZone:"Europe/Lisbon",hour:"2-digit",minute:"2-digit"}).format(new Date(f.fixture.date)),
-            kickoff:f.fixture.date,score,suggestion:best,suggestions,dataQuality:quality(h,a,h2,p,sh,sa),
+            kickoff:f.fixture.date,score,suggestion:best,suggestions,dataQuality:quality(h,a,h2,p,sh,sa), dataPoints:{historyHome:h.n,historyAway:a.n,h2h:h2.n,prediction:p.available,standingsHome:sh?.rank!=null,standingsAway:sa?.rank!=null},
             metrics:{
               form:`${h.winRate!=null?Math.round(h.winRate):"—"}% / ${a.winRate!=null?Math.round(a.winRate):"—"}%`,
               goals:`${h.o15Rate!=null?Math.round(h.o15Rate):"—"}% / ${a.o15Rate!=null?Math.round(a.o15Rate):"—"}% +1.5`,
@@ -257,8 +257,8 @@ export default async function handler(req,res){
           });
         }catch(err){ failures.push({fixture:f.fixture.id,error:err.message}); console.warn("Candidato ignorado",f.fixture.id,err.message); }
       }
-      return {fixturesFound:fixtures.length,candidates:candidates.length,failures:failures.length,games:out.sort((a,b)=>b.score-a.score).slice(0,TOP_LIMIT)};
+      return {fixturesFound:fixtures.length,candidates:candidates.length,analyzedCount,failures:failures.length,games:out.sort((a,b)=>b.score-a.score).slice(0,TOP_LIMIT)};
     },force);
-    res.status(200).json({ok:true,version:"1.4.5",date,dateLabel:labelDate(date),fixturesFound:result.fixturesFound,candidates:result.candidates,analyzed:result.candidates,selected:result.games.length,games:result.games,diagnostics:{optionalFailures:result.failures},cached:!force});
+    res.status(200).json({ok:true,version:"1.4.6",date,dateLabel:labelDate(date),fixturesFound:result.fixturesFound,candidates:result.candidates,analyzed:result.analyzedCount,selected:result.games.length,games:result.games,diagnostics:{optionalFailures:result.failures},cached:!force});
   }catch(e){ console.error(e); res.status(500).json({ok:false,error:e.message||"Erro ao analisar jogos."}); }
 }
