@@ -92,11 +92,22 @@
       </div>
 
       <div class="analysis-info">
-        <strong>Como funciona:</strong> o sistema analisa forma recente, golos, desempenho casa/fora, H2H, classificação e a previsão estatística disponível. A <b>odd não entra no cálculo</b>. Só são apresentados os jogos com pontuação mínima.
+        <strong>Como funciona:</strong> o sistema combina forma, golos, casa/fora, H2H, classificação e Predictions. A <b>odd não entra no cálculo</b>.
+        O Score é calibrado com o histórico guardado neste navegador quando já existem resultados suficientes.
+      </div>
+
+      <div class="history-toolbar">
+        <button class="btn-filter active" id="history-tab-opportunities" onclick="mostrarSubAbaJogos('oportunidades')">🔥 Oportunidades</button>
+        <button class="btn-filter" id="history-tab-history" onclick="mostrarSubAbaJogos('historico')">📚 Histórico</button>
+        <button class="btn-filter" id="history-tab-stats" onclick="mostrarSubAbaJogos('estatisticas')">📊 Calibração</button>
       </div>
 
       <div id="games-status" class="games-status">A preparar análise…</div>
-      <div class="games-grid" id="games-container"></div>
+      <div id="games-opportunities">
+        <div class="games-grid" id="games-container"></div>
+      </div>
+      <div id="games-history" style="display:none;"></div>
+      <div id="games-calibration" style="display:none;"></div>
     </div>
   </div>
 
@@ -116,6 +127,6 @@
     </div>
   </div>
 
-  <script src="app.js?v=61"></script>
+  <script src="app.js?v=70"></script>
 </body>
 </html>
