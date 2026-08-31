@@ -82,7 +82,7 @@ async function carregarMelhoresJogos(force = false) {
     document.getElementById("games-date").innerText = `${data.dateLabel || "Hoje"} · ${data.analyzed || 0} jogos analisados · ${data.selected ?? (data.games || []).length} oportunidades`;
     status.className = "games-status success";
     status.innerText = baseJogos.length
-      ? `Foram seleccionadas ${baseJogos.length} das melhores oportunidades do dia.`
+      ? `Foram seleccionadas ${baseJogos.length} das melhores oportunidades do dia. A confiança é uma estimativa estatística, não uma garantia.`
       : ((data.analyzed || 0) > 0 ? "Os jogos de hoje foram analisados, mas nenhum atingiu o nível mínimo do modelo." : "Não foram encontrados jogos pré-jogo nas competições disponíveis.");
     renderizarJogos();
   } catch (err) {
@@ -186,7 +186,7 @@ function renderizarJogos() {
   if (!baseJogos.length) return;
   baseJogos.forEach((j, index) => {
     const n = nivelScore(j.score);
-    const confidence = Math.round(j.suggestion.confidence);
+    const confidence = Math.round(Math.min(96, Math.max(0, j.suggestion.confidence)));
     const alternatives = (j.suggestions || []).filter(s => s.market !== j.suggestion.market).slice(0,2);
     const saved = historicoSugestoes.some(x => String(x.id) === String(j.id));
     const card = document.createElement("div");
@@ -216,7 +216,7 @@ function renderizarJogos() {
         ${alternatives.length ? `<div class="alternatives"><small>Outras leituras</small>${alternatives.map(s => `<div>• ${escapeHtml(s.label)} <b>${Math.round(s.confidence)}%</b></div>`).join("")}</div>` : ""}
       </div>
       <div class="card-footer">
-        <span class="data-note">${j.dataQuality === "high" ? "✓ Dados fortes" : j.dataQuality === "medium" ? "✓ Dados suficientes" : "⚠ Dados limitados"}</span>
+        <span class="data-note">${j.dataQuality === "high" ? "✓ Dados fortes" : j.dataQuality === "medium" ? "✓ Dados razoáveis" : "⚠ Dados limitados"}</span>
         <div class="card-actions">
           <button class="btn-import" onclick="importarParaFormulario('${jsQuote(`${j.home} vs ${j.away} (${j.suggestion.label})`)}', 1)">⚡ Registar</button>
           <button class="btn-history" onclick="guardarSugestao('${jsQuote(j.id)}')" ${saved ? "disabled" : ""}>${saved ? "✓ Guardada" : "📚 Guardar"}</button>
