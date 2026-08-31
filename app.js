@@ -4,6 +4,7 @@ let fltCasa = "todas", idEdicao = null, baseJogos = [];
 
 const MIN_SCORE = 50;
 const TOP_LIMIT = 5;
+function clamp(n, a=0, b=100) { return Math.max(a, Math.min(b, Number(n) || 0)); }
 const HIST_KEY = "painel_v14_historico";
 let historicoSugestoes = JSON.parse(localStorage.getItem(HIST_KEY) || "[]");
 
