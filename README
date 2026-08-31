@@ -62,3 +62,21 @@ A V1.3 usa API-Football como fonte de dados e ordena os jogos por um score próp
 - As competições prioritárias continuam a ter maior peso, mas existem competições de fallback.
 - A lista deixa de depender exclusivamente de uma whitelist de ligas para encontrar jogos.
 - O limite mínimo foi ajustado para permitir que o ranking mostre os melhores jogos mesmo quando os dados do dia são incompletos.
+
+
+## V1.4 — histórico, explicação e calibração
+- Cada oportunidade mostra nível (Forte/Boa/Moderada), explicação e sinais usados.
+- Sugestões podem ser guardadas num histórico local do navegador.
+- Cada sugestão guardada pode ser marcada como ganha/perdida quando o jogo termina.
+- A taxa de acerto é calculada globalmente e por mercado.
+- Depois de 5 resultados avaliados no mesmo mercado, a taxa histórica passa a ajustar parcialmente a confiança/Score.
+- A calibração usa shrinkage: o histórico influencia, mas não substitui o modelo estatístico.
+- O histórico é local ao navegador (localStorage); não é uma base de dados central.
+- A V1.4 não promete resultados e não usa odds para escolher oportunidades.
+
+## V1.4.1 — calibração de confiança
+- Corrigida a possibilidade de aparecer 100% de confiança com dados fracos.
+- Percentagens 1X2 da API são normalizadas quando não somam 100%.
+- Mercados de dupla possibilidade recebem penalização quando há pouca evidência.
+- Existe um limite de confiança dependente da quantidade de dados disponíveis.
+- A interface deixa de chamar dados médios de "dados suficientes" e passa a "dados razoáveis".
