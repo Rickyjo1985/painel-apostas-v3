@@ -31,6 +31,19 @@ function clamp(n,a=0,b=100){ return Math.max(a,Math.min(b,Number.isFinite(Number
 function avg(a){ return a.length ? a.reduce((x,y)=>x+y,0)/a.length : null; }
 function pct(a){ return a.length ? 100*a.filter(Boolean).length/a.length : null; }
 function num(v){ const n=Number(v); return Number.isFinite(n)?n:null; }
+function numericPrediction(v){
+  if(v==null) return null;
+  if(typeof v==='number') return (v>=0 && v<=10) ? v : null;
+  const s=String(v).trim().replace(',', '.');
+  const direct=Number(s);
+  if(Number.isFinite(direct)) return (direct>=0 && direct<=10) ? direct : null;
+  const m=s.match(/(\d+(?:\.\d+)?)\s*[-–]\s*(\d+(?:\.\d+)?)/);
+  if(m){
+    const a=Number(m[1]),b=Number(m[2]);
+    if(a>=0&&b>=0&&a<=10&&b<=10) return (a+b)/2;
+  }
+  return null;
+}
 function percent(v){
   if(v==null) return null;
   const n=Number(String(v).replace("%","").trim());
@@ -105,10 +118,13 @@ function predictionData(row){
     const sum=home+draw+away;
     if(sum>0 && Math.abs(sum-100)>0.5){home=home/sum*100;draw=draw/sum*100;away=away/sum*100;}
   }
+  const homeGoals=numericPrediction(goals.home), awayGoals=numericPrediction(goals.away);
   return {
     home,draw,away,advice:x.advice||null,underOver:x.under_over||null,
-    homeGoals:num(goals.home),awayGoals:num(goals.away),winnerId:num(winner.id),winnerName:winner.name||null,
-    winOrDraw:x.win_or_draw===true, available:[home,draw,away].some(v=>v!=null)
+    homeGoals,awayGoals,rawHomeGoals:goals.home??null,rawAwayGoals:goals.away??null,
+    winnerId:num(winner.id),winnerName:winner.name||null,
+    winOrDraw:x.win_or_draw===true,
+    available:[home,draw,away].filter(v=>v!=null).length===3 && (home+draw+away)>0
   };
 }
 function standingsMap(rows){
@@ -134,6 +150,33 @@ function formStringRate(form){
   const s=String(form).toUpperCase().replace(/[^WDL]/g,"");
   return s.length ? 100*(s.split("").filter(x=>x==="W").length/s.length) : null;
 }
+function teamStatsData(rows){
+  const x=Array.isArray(rows)?rows[0]:rows;
+  const f=x?.fixtures||{}, g=x?.goals||{}, cs=x?.clean_sheet||{}, fs=x?.failed_to_score||{};
+  const played=num(f.played?.total), wins=num(f.wins?.total), draws=num(f.draws?.total), losses=num(f.loses?.total ?? f.losses?.total);
+  const gf=num(g.for?.total?.total ?? g.for?.total), ga=num(g.against?.total?.total ?? g.against?.total);
+  const avgGF=num(g.for?.average?.total), avgGA=num(g.against?.average?.total);
+  const o15=num(g.for?.under_over?.over_1_5?.total) ?? null;
+  const btts=num(g.for?.total?.total);
+  return {
+    played,wins,draws,losses,
+    winRate:played&&wins!=null?wins/played*100:null,
+    avgGF,avgGA,
+    cleanSheet:num(cs.total), failedToScore:num(fs.total),
+    sourceAvailable:!!(played||avgGF!=null||avgGA!=null)
+  };
+}
+function mergeHistoryWithStats(h,st){
+  if(!st?.sourceAvailable) return h;
+  return {
+    ...h,
+    n:Math.max(h.n||0,st.played||0),
+    avgGF:h.avgGF??st.avgGF,
+    avgGA:h.avgGA??st.avgGA,
+    winRate:h.winRate??st.winRate
+  };
+}
+
 function marketReason(label,h,a,h2,p,standH,standA){
   const bits=[];
   const add=(text)=>{if(text)bits.push(text);};
@@ -208,7 +251,7 @@ export default async function handler(req,res){
       const upcoming=fixtures.filter(f=>["NS","TBD"].includes(f.fixture?.status?.short)&&!BLOCKED.test(f.league?.name||""));
       const candidates=upcoming.map(f=>({f,league:leagueInfo(f)})).filter(x=>x.league)
         .sort((a,b)=>(b.league.weight-a.league.weight)||(new Date(a.f.fixture.date)-new Date(b.f.fixture.date))).slice(0,MAX_CANDIDATES);
-      const out=[],failures=[];
+      const out=[],failures=[],optionalErrors=[];
       let analyzedCount=0;
       // Standings are fetched once per competition/season and reused for both teams.
       const standingCache=new Map();
@@ -223,14 +266,27 @@ export default async function handler(req,res){
             standingCache.set(sk,standingsMap(standings));
           }
           const sm=standingCache.get(sk);
-          const [hf,af,hh,pr]=await Promise.all([
+          const [hf,af,hh,pr,hstats,astats]=await Promise.all([
             cached(`v145:h:${hid}`,()=>optionalApi("/fixtures",{team:hid,last:10,timezone:"Europe/Lisbon"},[],force),force),
             cached(`v145:a:${aid}`,()=>optionalApi("/fixtures",{team:aid,last:10,timezone:"Europe/Lisbon"},[],force),force),
             cached(`v145:h2h:${hid}-${aid}`,()=>optionalApi("/fixtures/headtohead",{h2h:`${hid}-${aid}`,last:10},[],force),force),
-            cached(`v145:p:${f.fixture.id}`,()=>optionalApi("/predictions",{fixture:f.fixture.id},[],force),force)
+            cached(`v145:p:${f.fixture.id}`,()=>optionalApi("/predictions",{fixture:f.fixture.id},[],force),force),
+            cached(`v145:ts:${f.league.id}:${f.league.season}:${hid}`,()=>optionalApi("/teams/statistics",{league:f.league.id,season:f.league.season,team:hid},[],force),force),
+            cached(`v145:ts:${f.league.id}:${f.league.season}:${aid}`,()=>optionalApi("/teams/statistics",{league:f.league.id,season:f.league.season,team:aid},[],force),force)
           ]);
-          const h=historyFeatures(hf,hid),a=historyFeatures(af,aid),h2=h2hFeatures(hh),p=predictionData(pr[0]);
+          let h=historyFeatures(hf,hid),a=historyFeatures(af,aid),h2=h2hFeatures(hh),p=predictionData(pr[0]);
+          h=mergeHistoryWithStats(h,teamStatsData(hstats));
+          a=mergeHistoryWithStats(a,teamStatsData(astats));
           const sh=sm.get(Number(hid))||null,sa=sm.get(Number(aid))||null;
+          // Standings form/records are a reliable fallback when recent fixture history is sparse.
+          if(h.winRate==null){
+            h.winRate=formStringRate(sh?.form) ?? (sh?.homePlayed && sh?.homeWins!=null ? sh.homeWins/sh.homePlayed*100 : null);
+          }
+          if(a.winRate==null){
+            a.winRate=formStringRate(sa?.form) ?? (sa?.awayPlayed && sa?.awayWins!=null ? sa.awayWins/sa.awayPlayed*100 : null);
+          }
+          if(h.n===0 && sh?.form) h.n=String(sh.form).replace(/[^WDL]/gi,"").length;
+          if(a.n===0 && sa?.form) a.n=String(sa.form).replace(/[^WDL]/gi,"").length;
           const markets=buildMarkets(h,a,h2,p);
           const score=scoreGame(h,a,h2,p,sh,sa,league.weight);
           const best={...markets[0],reason:marketReason(markets[0].label,h,a,h2,p,sh,sa)};
@@ -238,10 +294,10 @@ export default async function handler(req,res){
           out.push({
             id:f.fixture.id,home:f.teams.home.name,away:f.teams.away.name,league:league.name,
             time:new Intl.DateTimeFormat("pt-PT",{timeZone:"Europe/Lisbon",hour:"2-digit",minute:"2-digit"}).format(new Date(f.fixture.date)),
-            kickoff:f.fixture.date,score,suggestion:best,suggestions,dataQuality:quality(h,a,h2,p,sh,sa), dataPoints:{historyHome:h.n,historyAway:a.n,h2h:h2.n,prediction:p.available,standingsHome:sh?.rank!=null,standingsAway:sa?.rank!=null},
+            kickoff:f.fixture.date,score,suggestion:best,suggestions,dataQuality:quality(h,a,h2,p,sh,sa), dataPoints:{historyHome:h.n,historyAway:a.n,h2h:h2.n,prediction:p.available,standingsHome:sh?.rank!=null,standingsAway:sa?.rank!=null,teamStatsHome:h.avgGF!=null||h.avgGA!=null,teamStatsAway:a.avgGF!=null||a.avgGA!=null},
             metrics:{
-              form:`${h.winRate!=null?Math.round(h.winRate):"—"}% / ${a.winRate!=null?Math.round(a.winRate):"—"}%`,
-              goals:`${h.o15Rate!=null?Math.round(h.o15Rate):"—"}% / ${a.o15Rate!=null?Math.round(a.o15Rate):"—"}% +1.5`,
+              form:`${h.winRate!=null?Math.round(h.winRate):"—"}% / ${a.winRate!=null?Math.round(a.winRate):"—"}% · ${h.n}/${a.n}`,
+              goals:`${h.o15Rate!=null?Math.round(h.o15Rate):"—"}% / ${a.o15Rate!=null?Math.round(a.o15Rate):"—"}% +1.5 · ${h.avgGF!=null?h.avgGF.toFixed(2):"—"}/${a.avgGF!=null?a.avgGF.toFixed(2):"—"} GF`,
               h2h:h2.n?`${h2.n} jogos · +1,5 ${Math.round(h2.o15??0)}%`:"—",
               prediction:p.available?`${Math.round(p.home??0)}% / ${Math.round(p.draw??0)}% / ${Math.round(p.away??0)}%`:"—",
               table:sh?.rank&&sa?.rank?`${sh.rank}º / ${sa.rank}º`:"—"
@@ -251,7 +307,7 @@ export default async function handler(req,res){
               homeGA:h.avgGA,awayGA:a.avgGA,homeO15:h.o15Rate,awayO15:a.o15Rate,
               homeBTTS:h.bttsRate,awayBTTS:a.bttsRate,h2hO15:h2.o15,h2hBTTS:h2.btts,
               predictionHome:p.home,predictionDraw:p.draw,predictionAway:p.away,
-              predictedGoals:[p.homeGoals,p.awayGoals],homeRank:sh?.rank,awayRank:sa?.rank
+              predictedGoals:[p.homeGoals,p.awayGoals],rawPredictedGoals:[p.rawHomeGoals,p.rawAwayGoals],homeRank:sh?.rank,awayRank:sa?.rank
             },
             predictionAdvice:p.advice||null
           });
@@ -259,6 +315,6 @@ export default async function handler(req,res){
       }
       return {fixturesFound:fixtures.length,candidates:candidates.length,analyzedCount,failures:failures.length,games:out.sort((a,b)=>b.score-a.score).slice(0,TOP_LIMIT)};
     },force);
-    res.status(200).json({ok:true,version:"1.4.6",date,dateLabel:labelDate(date),fixturesFound:result.fixturesFound,candidates:result.candidates,analyzed:result.analyzedCount,selected:result.games.length,games:result.games,diagnostics:{optionalFailures:result.failures},cached:!force});
+    res.status(200).json({ok:true,version:"1.4.7",date,dateLabel:labelDate(date),fixturesFound:result.fixturesFound,candidates:result.candidates,analyzed:result.analyzedCount,selected:result.games.length,games:result.games,diagnostics:{optionalFailures:result.failures},cached:!force});
   }catch(e){ console.error(e); res.status(500).json({ok:false,error:e.message||"Erro ao analisar jogos."}); }
 }
