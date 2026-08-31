@@ -1,0 +1,64 @@
+# Painel Apostas V3 — V1.3
+
+## O que foi alterado
+- A antiga lista de jogos fictícios foi substituída por **Melhores oportunidades do dia**.
+- Os jogos são obtidos da API-Football através de uma função serverless da Vercel.
+- A API key fica no servidor, em `APIFOOTBALL_KEY`.
+- A odd **não entra no score**.
+- Cada jogo recebe score 0–100 e uma sugestão principal.
+- O sistema usa forma recente, golos, casa/fora e o endpoint de Predictions da API-Football.
+- Apenas as melhores oportunidades são mostradas.
+
+## Configuração na Vercel
+1. No projecto Vercel: **Settings → Environment Variables**.
+2. Criar:
+   - Name: `APIFOOTBALL_KEY`
+   - Value: a tua chave da API-Football.
+3. Aplicar a variável a Production/Preview conforme necessário.
+4. Fazer novo Deploy.
+
+## Teste local
+O projecto é estático + Vercel Functions. Para testar a função `/api/jogos`, usa a Vercel CLI:
+```bash
+npx vercel dev
+```
+e abre a aplicação.
+
+## Nota sobre quota
+A V1 consulta os jogos do dia e depois dados históricos/previsões. O cache de 30 minutos reduz chamadas repetidas dentro da mesma instância. Para planos com quota pequena, recomenda-se começar com poucas competições e aumentar depois.
+
+## Segurança
+A palavra-passe original continua no frontend. Isto **não é autenticação forte**, porque qualquer segredo colocado em JavaScript no browser pode ser descoberto. Esta V1 mantém o comportamento existente para não quebrar o painel, mas a próxima versão deveria migrar o login para autenticação server-side.
+
+## Score
+O score actual é uma V1 heurística, não uma garantia de resultado. O sistema deve guardar resultados históricos numa futura V2 para medir precisão por mercado e recalibrar os pesos.
+
+
+## V1.1 — correcções
+- Define `TOP_LIMIT = 5` para evitar erro no endpoint.
+- Leitura mais robusta de `APIFOOTBALL_KEY`.
+- Mensagens específicas para chave ausente/inválida.
+- Tratamento mais seguro de respostas não-JSON da API.
+- A chave nunca é devolvida pela função.
+
+
+## V1.3 — algoritmo completo
+A V1.3 usa API-Football como fonte de dados e ordena os jogos por um score próprio, sem usar odds.
+- Consulta os jogos do dia em Lisboa.
+- Analisa até 8 candidatos das competições configuradas.
+- Combina forma, golos, casa/fora, H2H e Predictions.
+- Avalia Over 1.5, Over 2.5, Ambas Marcam, 1X, X2, vitória casa e vitória fora.
+- Selecciona a melhor sugestão de cada jogo e apresenta TOP 5.
+- Dados incompletos reduzem a qualidade; não são automaticamente tratados como uma aposta vencedora.
+- Cache de 30 minutos e limite de candidatos para controlar a quota.
+- Score/Confiança são estimativas do modelo e não garantias de resultado.
+
+
+## V1.3.1 — correcção do problema "0 jogos analisados"
+- Um erro num endpoint opcional (histórico, H2H ou Predictions) já não elimina o jogo inteiro.
+- A resposta distingue jogos encontrados, candidatos analisados e oportunidades seleccionadas.
+- As Predictions são lidas correctamente a partir de `response[0].predictions`.
+- Os históricos recentes usam `/fixtures?team=...&last=10`, evitando dependência desnecessária da temporada.
+- As competições prioritárias continuam a ter maior peso, mas existem competições de fallback.
+- A lista deixa de depender exclusivamente de uma whitelist de ligas para encontrar jogos.
+- O limite mínimo foi ajustado para permitir que o ranking mostre os melhores jogos mesmo quando os dados do dia são incompletos.
