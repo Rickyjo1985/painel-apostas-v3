@@ -2,8 +2,10 @@ const PSW = "Rickyjo1985";
 let apostas = JSON.parse(localStorage.getItem('banca_data')) || [];
 let fltCasa = "todas", idEdicao = null, baseJogos = [];
 
-const MIN_SCORE = 60;
-const TOP_LIMIT = 8;
+const MIN_SCORE = 50;
+const TOP_LIMIT = 5;
+const HIST_KEY = "painel_v14_historico";
+let historicoSugestoes = JSON.parse(localStorage.getItem(HIST_KEY) || "[]");
 
 function verificarSenha() {
   if (document.getElementById("password").value === PSW) {
@@ -76,7 +78,7 @@ async function carregarMelhoresJogos(force = false) {
     const response = await fetch(`/api/jogos${q}`, { cache: force ? "no-store" : "default" });
     const data = await response.json();
     if (!response.ok) throw new Error(data.error || "Não foi possível obter os jogos.");
-    baseJogos = data.games || [];
+    baseJogos = calibrarJogos(data.games || []);
     document.getElementById("games-date").innerText = `${data.dateLabel || "Hoje"} · ${data.analyzed || 0} jogos analisados · ${data.selected ?? (data.games || []).length} oportunidades`;
     status.className = "games-status success";
     status.innerText = baseJogos.length
@@ -93,19 +95,108 @@ async function carregarMelhoresJogos(force = false) {
   }
 }
 
+function nivelScore(score) {
+  if (score >= 85) return { cls:"excellent", label:"FORTE", icon:"🟢" };
+  if (score >= 75) return { cls:"very-good", label:"BOA", icon:"🟡" };
+  return { cls:"interesting", label:"MODERADA", icon:"🟠" };
+}
+
+function historicoMercado(market) {
+  const rows = historicoSugestoes.filter(x => x.market === market && x.resultado !== "pendente");
+  const wins = rows.filter(x => x.resultado === "ganha").length;
+  return { n: rows.length, wins, rate: rows.length ? wins / rows.length * 100 : null };
+}
+
+function calibrarConfianca(raw, market) {
+  const h = historicoMercado(market);
+  // Sem amostra suficiente, não alteramos a previsão.
+  if (h.n < 5) return { confidence: Math.round(raw), sample:h.n, rate:h.rate };
+  // Shrinkage: a amostra histórica influencia, mas nunca domina o modelo.
+  const empirical = 50 + (h.rate - 50) * Math.min(1, h.n / 20);
+  return {
+    confidence: Math.round(clamp(.75 * raw + .25 * empirical)),
+    sample:h.n,
+    rate:h.rate
+  };
+}
+
+function calibrarJogos(games) {
+  return (games || []).map(j => {
+    const c = calibrarConfianca(j.suggestion.confidence, j.suggestion.market);
+    const calibratedScore = Math.round(clamp(.78 * j.score + .22 * c.confidence));
+    return {
+      ...j,
+      rawScore:j.score,
+      rawConfidence:j.suggestion.confidence,
+      score:calibratedScore,
+      suggestion:{...j.suggestion, confidence:c.confidence, calibrationSample:c.sample, calibrationRate:c.rate}
+    };
+  }).sort((a,b)=>b.score-a.score);
+}
+
+function guardarSugestao(id) {
+  const j = baseJogos.find(x => String(x.id) === String(id));
+  if (!j) return;
+  if (historicoSugestoes.some(x => String(x.id) === String(id))) {
+    alert("Esta sugestão já está no histórico.");
+    return;
+  }
+  historicoSugestoes.unshift({
+    id:j.id, date:j.kickoff?.slice(0,10) || new Date().toISOString().slice(0,10),
+    kickoff:j.kickoff, home:j.home, away:j.away, league:j.league,
+    market:j.suggestion.market, label:j.suggestion.label,
+    confidence:j.suggestion.confidence, score:j.score,
+    resultado:"pendente", savedAt:new Date().toISOString()
+  });
+  localStorage.setItem(HIST_KEY, JSON.stringify(historicoSugestoes));
+  renderizarJogos();
+  alert("Sugestão guardada no histórico.");
+}
+
+function atualizarResultado(id, resultado) {
+  historicoSugestoes = historicoSugestoes.map(x => String(x.id) === String(id) ? {...x, resultado, resolvedAt:new Date().toISOString()} : x);
+  localStorage.setItem(HIST_KEY, JSON.stringify(historicoSugestoes));
+  renderizarHistorico();
+  renderizarCalibracao();
+  baseJogos = calibrarJogos(baseJogos);
+  renderizarJogos();
+}
+
+function removerHistorico(id) {
+  historicoSugestoes = historicoSugestoes.filter(x => String(x.id) !== String(id));
+  localStorage.setItem(HIST_KEY, JSON.stringify(historicoSugestoes));
+  renderizarHistorico();
+  renderizarCalibracao();
+}
+
+function mostrarSubAbaJogos(tab) {
+  ["oportunidades","historico","estatisticas"].forEach(x => {
+    const el=document.getElementById(`games-${x}`);
+    if(el) el.style.display = tab===x ? "block" : "none";
+    const b=document.getElementById(`history-tab-${x}`);
+    if(b) b.classList.toggle("active", tab===x);
+  });
+  if(tab==="historico") renderizarHistorico();
+  if(tab==="estatisticas") renderizarCalibracao();
+}
+
 function renderizarJogos() {
   const c = document.getElementById("games-container");
   c.innerHTML = "";
   if (!baseJogos.length) return;
   baseJogos.forEach((j, index) => {
-    const level = j.score >= 85 ? "excellent" : j.score >= 75 ? "very-good" : "interesting";
+    const n = nivelScore(j.score);
     const confidence = Math.round(j.suggestion.confidence);
     const alternatives = (j.suggestions || []).filter(s => s.market !== j.suggestion.market).slice(0,2);
+    const saved = historicoSugestoes.some(x => String(x.id) === String(j.id));
     const card = document.createElement("div");
-    card.className = `game-card opportunity-card ${level}`;
+    card.className = `game-card opportunity-card ${n.cls}`;
+    const calibration = j.suggestion.calibrationSample >= 5
+      ? `<span>📐 Calibrado com ${j.suggestion.calibrationSample} resultados (${Math.round(j.suggestion.calibrationRate)}% acerto)</span>`
+      : `<span>📐 Calibração inicial${j.suggestion.calibrationSample ? ` · ${j.suggestion.calibrationSample}/5 resultados` : ""}</span>`;
     card.innerHTML = `
       <div>
-        <div class="rank-line"><span class="rank-badge">#${index + 1}</span><span class="score-badge">Score ${j.score}/100</span></div>
+        <div class="rank-line"><span class="rank-badge">#${index + 1}</span><span class="score-badge">Score ${j.score}/100</span><span class="level-badge">${n.icon} ${n.label}</span></div>
         <div class="game-meta"><span>⚽ ${escapeHtml(j.league)}</span><span>🕐 ${escapeHtml(j.time)}</span></div>
         <div class="game-title">${escapeHtml(j.home)} <span>vs</span> ${escapeHtml(j.away)}</div>
         <div class="confidence-line"><span>Confiança estimada</span><strong>${confidence}%</strong></div>
@@ -121,14 +212,77 @@ function renderizarJogos() {
           <span>🤝 H2H ${j.metrics?.h2h ?? "—"}</span>
           <span>🤖 API ${j.metrics?.prediction ?? "—"}</span>
         </div>
+        <div class="calibration-note">${calibration}</div>
         ${alternatives.length ? `<div class="alternatives"><small>Outras leituras</small>${alternatives.map(s => `<div>• ${escapeHtml(s.label)} <b>${Math.round(s.confidence)}%</b></div>`).join("")}</div>` : ""}
       </div>
       <div class="card-footer">
         <span class="data-note">${j.dataQuality === "high" ? "✓ Dados fortes" : j.dataQuality === "medium" ? "✓ Dados suficientes" : "⚠ Dados limitados"}</span>
-        <button class="btn-import" onclick="importarParaFormulario('${jsQuote(`${j.home} vs ${j.away} (${j.suggestion.label})`)}', 1)">⚡ Registar</button>
+        <div class="card-actions">
+          <button class="btn-import" onclick="importarParaFormulario('${jsQuote(`${j.home} vs ${j.away} (${j.suggestion.label})`)}', 1)">⚡ Registar</button>
+          <button class="btn-history" onclick="guardarSugestao('${jsQuote(j.id)}')" ${saved ? "disabled" : ""}>${saved ? "✓ Guardada" : "📚 Guardar"}</button>
+        </div>
       </div>`;
     c.appendChild(card);
   });
+}
+
+function renderizarHistorico() {
+  const c=document.getElementById("games-history");
+  if(!c) return;
+  if(!historicoSugestoes.length){
+    c.innerHTML=`<div class="history-empty">📚 Ainda não tens sugestões guardadas. Guarda uma oportunidade para começares a medir a precisão do modelo.</div>`;
+    return;
+  }
+  const total=historicoSugestoes.length, resolved=historicoSugestoes.filter(x=>x.resultado!=="pendente");
+  const wins=resolved.filter(x=>x.resultado==="ganha").length;
+  c.innerHTML=`
+    <div class="history-summary">
+      <div><strong>${total}</strong><small>Sugestões guardadas</small></div>
+      <div><strong>${resolved.length}</strong><small>Resultados avaliados</small></div>
+      <div><strong>${resolved.length ? Math.round(wins/resolved.length*100) : "—"}%</strong><small>Taxa de acerto</small></div>
+    </div>
+    <div class="history-list">
+      ${historicoSugestoes.map(x=>`
+        <div class="history-row">
+          <div>
+            <b>${escapeHtml(x.home)} vs ${escapeHtml(x.away)}</b>
+            <small>${escapeHtml(x.league)} · ${escapeHtml(x.label)} · Score ${x.score} · Confiança ${x.confidence}%</small>
+          </div>
+          <div class="history-actions">
+            <button class="result-btn ${x.resultado==="ganha"?"selected":""}" onclick="atualizarResultado('${jsQuote(x.id)}','ganha')">✓ Ganha</button>
+            <button class="result-btn ${x.resultado==="perdida"?"selected":""}" onclick="atualizarResultado('${jsQuote(x.id)}','perdida')">✕ Perdida</button>
+            ${x.resultado==="pendente" ? `<span class="pending-badge">⏳ Pendente</span>` : ""}
+            <button class="delete-history" onclick="removerHistorico('${jsQuote(x.id)}')">×</button>
+          </div>
+        </div>`).join("")}
+    </div>`;
+}
+
+function renderizarCalibracao() {
+  const c=document.getElementById("games-calibration");
+  if(!c) return;
+  const resolved=historicoSugestoes.filter(x=>x.resultado!=="pendente");
+  const byMarket={};
+  resolved.forEach(x=>{
+    if(!byMarket[x.market]) byMarket[x.market]=[];
+    byMarket[x.market].push(x);
+  });
+  const rows=Object.entries(byMarket).sort((a,b)=>b[1].length-a[1].length);
+  const overall=resolved.length ? Math.round(resolved.filter(x=>x.resultado==="ganha").length/resolved.length*100) : null;
+  c.innerHTML=`
+    <div class="calibration-panel">
+      <h3>📊 Calibração do modelo</h3>
+      <p>O ajuste só começa a influenciar o Score depois de <b>5 resultados avaliados</b> no mesmo mercado. Antes disso, o modelo mantém o valor original.</p>
+      <div class="history-summary">
+        <div><strong>${overall==null?"—":overall+"%"}</strong><small>Acerto global</small></div>
+        <div><strong>${resolved.length}</strong><small>Resultados</small></div>
+        <div><strong>${Object.keys(byMarket).length}</strong><small>Mercados avaliados</small></div>
+      </div>
+      ${rows.length ? `<div class="calibration-table"><div class="ct-head"><span>Mercado</span><span>Amostra</span><span>Acerto</span><span>Estado</span></div>${rows.map(([market,items])=>{
+        const wins=items.filter(x=>x.resultado==="ganha").length, rate=Math.round(wins/items.length*100);
+        return `<div class="ct-row"><span>${escapeHtml(items[0].label)}</span><span>${items.length}</span><span>${rate}%</span><span>${items.length>=5?"🟢 A calibrar":"⚪ A recolher dados"}</span></div>`;
+      }).join("")}</div>` : `<div class="history-empty">Ainda não há resultados avaliados.</div>`}
+    </div>`;
 }
 
 function jsQuote(s) { return s.replace(/\\/g, "\\\\").replace(/'/g, "\\'").replace(/\n/g, " "); }
