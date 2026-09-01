@@ -95,8 +95,8 @@ async function carregarMelhoresJogos(force = false) {
     status.className = "games-status success";
     const remaining = data.diagnostics?.quotaRemaining != null ? ` · quota restante: ${data.diagnostics.quotaRemaining}` : "";
     status.innerText = baseJogos.length
-      ? `Foram seleccionadas ${baseJogos.length} das melhores opções do dia. ${data.recommendable ?? baseJogos.length} têm pelo menos 3 sinais de evidência. A confiança é uma estimativa estatística, não uma garantia.${remaining}`
-      : ((data.analyzed || 0) > 0 ? `Os jogos foram analisados, mas os dados disponíveis são insuficientes para recomendações fortes.${remaining}` : "Não foram encontrados jogos pré-jogo nas competições disponíveis.");
+      ? `Foram seleccionadas ${baseJogos.length} das melhores oportunidades com pelo menos 3 sinais reais. A confiança é uma estimativa estatística, não uma garantia.${remaining}`
+      : ((data.analyzed || 0) > 0 ? `Foram analisados ${data.analyzed} jogos, mas nenhum reuniu pelo menos 3 sinais reais. O modelo não vai recomendar apostas com dados insuficientes.${remaining}` : "Não foram encontrados jogos pré-jogo nas competições disponíveis.");
     renderizarJogos();
   } catch (err) {
     console.error(err);
@@ -203,6 +203,15 @@ function renderizarJogos() {
     const confidenceLabel = j.dataQuality === "insufficient" ? "Evidência disponível" : "Confiança estimada";
     const alternatives = (j.suggestions || []).filter(s => s.market !== j.suggestion.market).slice(0,2);
     const saved = historicoSugestoes.some(x => String(x.id) === String(j.id));
+    const derivedEvidence = [
+      Number(j.dataPoints?.historyHome || 0) >= 5,
+      Number(j.dataPoints?.historyAway || 0) >= 5,
+      Number(j.dataPoints?.h2h || 0) >= 2,
+      j.dataPoints?.prediction === true,
+      j.dataPoints?.standingsHome === true,
+      j.dataPoints?.standingsAway === true
+    ].filter(Boolean).length;
+    const signalCount = Number.isFinite(Number(j.evidenceCount)) ? Number(j.evidenceCount) : derivedEvidence;
     const card = document.createElement("div");
     card.className = `game-card opportunity-card ${n.cls}`;
     const calibration = j.suggestion.calibrationSample >= 5
@@ -236,7 +245,7 @@ function renderizarJogos() {
         ${alternatives.length ? `<div class="alternatives"><small>Outras leituras</small>${alternatives.map(s => `<div>• ${escapeHtml(s.label)} <b>${Math.round(s.confidence)}%</b></div>`).join("")}</div>` : ""}
       </div>
       <div class="card-footer">
-        <span class="data-note">${j.dataQuality === "high" ? "✓ Dados fortes" : j.dataQuality === "medium" ? "✓ Dados razoáveis" : j.dataQuality === "low" ? "⚠ Dados limitados" : "⛔ Dados insuficientes"} · ${j.evidenceCount ?? 0}/6 sinais</span>
+        <span class="data-note">${j.dataQuality === "high" ? "✓ Dados fortes" : j.dataQuality === "medium" ? "✓ Dados razoáveis" : j.dataQuality === "low" ? "⚠ Dados limitados" : "⛔ Dados insuficientes"} · ${signalCount}/6 sinais</span>
         <div class="card-actions">
           <button class="btn-import" onclick="importarParaFormulario('${jsQuote(`${j.home} vs ${j.away} (${j.suggestion.label})`)}', 1)">⚡ Registar</button>
           <button class="btn-history" onclick="guardarSugestao('${jsQuote(j.id)}')" ${saved ? "disabled" : ""}>${saved ? "✓ Guardada" : "📚 Guardar"}</button>
