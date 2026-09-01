@@ -156,9 +156,14 @@ A V1.3 usa API-Football como fonte de dados e ordena os jogos por um score próp
 - Namespace de cache actualizado para evitar mistura com V1.4.11.
 
 
-## V1.4.13
+## V1.4.14
 - Score separado de confiança.
 - Recomendações exigem concordância direcional; 50/50 sem apoio independente não gera aposta.
 - Dupla possibilidade exige pelo menos um sinal direcional independente, salvo vantagem clara da Prediction.
 - Score penaliza sinais contraditórios e considera qualidade/evidência.
 - Cache namespaced em v1413.
+
+
+## V1.4.14
+
+A explicação das recomendações foi tornada mais rigorosa: “Prediction + forma alinhadas” só aparece quando a Prediction e a forma favorecem claramente o mesmo lado. Quando não existe concordância suficiente, o painel explica explicitamente qual sinal favorece e qual está equilibrado.
