@@ -316,14 +316,29 @@ function removerHistorico(id) {
 }
 
 function mostrarSubAbaJogos(tab) {
-  ["oportunidades","historico","estatisticas"].forEach(x => {
-    const el=document.getElementById(`games-${x}`);
-    if(el) el.style.display = tab===x ? "block" : "none";
-    const b=document.getElementById(`history-tab-${x}`);
-    if(b) b.classList.toggle("active", tab===x);
+  const panels = {
+    oportunidades: "games-opportunities",
+    historico: "games-history",
+    estatisticas: "games-calibration"
+  };
+  const buttons = {
+    oportunidades: "history-tab-opportunities",
+    historico: "history-tab-historico",
+    estatisticas: "history-tab-estatisticas"
+  };
+
+  Object.entries(panels).forEach(([key, id]) => {
+    const el = document.getElementById(id);
+    if (el) el.style.display = key === tab ? "block" : "none";
   });
-  if(tab==="historico") renderizarHistorico();
-  if(tab==="estatisticas") renderizarCalibracao();
+  Object.entries(buttons).forEach(([key, id]) => {
+    const b = document.getElementById(id);
+    if (b) b.classList.toggle("active", key === tab);
+  });
+
+  if (tab === "oportunidades") renderizarJogos();
+  if (tab === "historico") renderizarHistorico();
+  if (tab === "estatisticas") renderizarCalibracao();
 }
 
 function renderizarJogos() {
