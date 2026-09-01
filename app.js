@@ -1,6 +1,6 @@
 const PSW = "Rickyjo1985";
 let apostas = JSON.parse(localStorage.getItem('banca_data')) || [];
-let fltCasa = "todas", idEdicao = null, baseJogos = [];
+let fltCasa = "todas", idEdicao = null, baseJogos = [], ultimoDiagnostico = null;
 
 const MIN_SCORE = 50;
 const TOP_LIMIT = 5;
@@ -90,6 +90,7 @@ async function carregarMelhoresJogos(force = false) {
       throw new Error(`O servidor não devolveu JSON. ${short}`);
     }
     if (!response.ok) throw new Error(data.error || "Não foi possível obter os jogos.");
+    ultimoDiagnostico = data.diagnostics || null;
     baseJogos = calibrarJogos(data.games || []);
     document.getElementById("games-date").innerText = `${data.dateLabel || "Hoje"} · ${data.analyzed || 0} jogos analisados · ${data.selected ?? (data.games || []).length} melhores opções`;
     status.className = "games-status success";
@@ -98,6 +99,7 @@ async function carregarMelhoresJogos(force = false) {
       ? `Foram seleccionadas ${baseJogos.length} das melhores oportunidades com pelo menos 3 sinais reais. A confiança é uma estimativa estatística, não uma garantia.${remaining}`
       : ((data.analyzed || 0) > 0 ? `Foram analisados ${data.analyzed} jogos, mas nenhum reuniu pelo menos 3 sinais reais. O modelo não vai recomendar apostas com dados insuficientes.${remaining}` : "Não foram encontrados jogos pré-jogo nas competições disponíveis.");
     renderizarJogos();
+    renderizarDiagnostico();
   } catch (err) {
     console.error(err);
     baseJogos = [];
@@ -106,6 +108,57 @@ async function carregarMelhoresJogos(force = false) {
   } finally {
     if (btn) btn.disabled = false;
   }
+}
+
+function diagIcon(status) {
+  if (status === "OK") return "🟢";
+  if (status === "vazio") return "🟡";
+  if (status === "não coberto") return "⚪";
+  if (status === "não testado") return "⚪";
+  return "🔴";
+}
+function renderizarDiagnostico() {
+  const box = document.getElementById("games-diagnostics");
+  if (!box) return;
+  const d = ultimoDiagnostico;
+  if (!d) { box.innerHTML = ""; box.style.display = "none"; return; }
+  const rows = (d.competitions || []).slice(0, 8);
+  const quota = d.quotaRemaining != null ? `${d.quotaRemaining}${d.quotaLimit ? ` / ${d.quotaLimit}` : ""}` : "—";
+  const renderEndpoint = (label, item) => {
+    if (!item) return `<div class="diag-row"><span>${label}</span><span>—</span></div>`;
+    const reason = item.reason ? ` · ${escapeHtml(item.reason)}` : "";
+    return `<div class="diag-row"><span>${diagIcon(item.status)} ${label}</span><span><b>${escapeHtml(item.status || "—")}</b>${item.results != null ? ` · ${item.results}` : ""}${reason}</span></div>`;
+  };
+  box.style.display = "block";
+  box.innerHTML = `
+    <div class="diagnostic-panel">
+      <div class="diagnostic-head"><div><b>🔎 Diagnóstico da API</b><small>Não altera o Score. Serve apenas para identificar onde os dados estão a faltar.</small></div><span class="diag-quota">Quota: ${quota}</span></div>
+      <div class="diagnostic-summary">
+        <span>Fixtures: <b>${d.fixtures?.results ?? "—"}</b></span>
+        <span>Competições: <b>${d.competitions?.length ?? 0}</b></span>
+        <span>Erros: <b>${d.optionalErrors?.length ?? 0}</b></span>
+      </div>
+      <div class="diagnostic-list">
+        ${rows.map((c, idx) => {
+          const e=c.endpointDiagnostics||{};
+          return `<details ${idx===0 ? "open" : ""} class="diagnostic-game">
+            <summary><b>${escapeHtml(c.league || "Competição")}</b> · S${escapeHtml(String(c.season || "—"))} · ${escapeHtml(String(c.dataQuality || "—"))} · ${c.evidenceCount ?? 0}/6 sinais</summary>
+            <div class="diag-grid">
+              ${renderEndpoint("Leagues / season", e.leagues)}
+              ${renderEndpoint("Standings", e.standings)}
+              ${renderEndpoint("Forma casa", e.fixturesHome)}
+              ${renderEndpoint("Forma casa fallback", e.fixturesHomeFallback)}
+              ${renderEndpoint("Forma fora", e.fixturesAway)}
+              ${renderEndpoint("Forma fora fallback", e.fixturesAwayFallback)}
+              ${renderEndpoint("H2H", e.h2h)}
+              ${renderEndpoint("Predictions", e.predictions)}
+              ${renderEndpoint("Team stats casa", e.teamStatsHome)}
+              ${renderEndpoint("Team stats fora", e.teamStatsAway)}
+            </div>
+          </details>`;
+        }).join("")}
+      </div>
+    </div>`;
 }
 
 function nivelScore(score) {
