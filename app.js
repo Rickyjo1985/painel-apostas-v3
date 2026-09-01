@@ -96,7 +96,7 @@ async function carregarMelhoresJogos(force = false) {
     status.className = "games-status success";
     const remaining = data.diagnostics?.quotaRemaining != null ? ` · quota restante: ${data.diagnostics.quotaRemaining}` : "";
     status.innerText = baseJogos.length
-      ? `Foram seleccionadas ${baseJogos.length} das melhores oportunidades com pelo menos 3 sinais reais. A confiança é uma estimativa estatística, não uma garantia.${remaining}`
+      ? `Foram seleccionadas ${baseJogos.length} das melhores oportunidades com pelo menos 3 sinais reais. A confiança é uma estimativa estatística; o Score mede a força e a concordância dos sinais, não uma garantia de resultado.${remaining}`
       : ((data.analyzed || 0) > 0 ? `Foram analisados ${data.analyzed} jogos, mas nenhum reuniu pelo menos 3 sinais reais. O modelo não vai recomendar apostas com dados insuficientes.${remaining}` : "Não foram encontrados jogos pré-jogo nas competições disponíveis.");
     renderizarJogos();
     renderizarDiagnostico();
@@ -162,9 +162,10 @@ function renderizarDiagnostico() {
 }
 
 function nivelScore(score) {
-  if (score >= 85) return { cls:"excellent", label:"FORTE", icon:"🟢" };
-  if (score >= 75) return { cls:"very-good", label:"BOA", icon:"🟡" };
-  return { cls:"interesting", label:"MODERADA", icon:"🟠" };
+  if (score >= 82) return { cls:"excellent", label:"FORTE", icon:"🟢" };
+  if (score >= 72) return { cls:"very-good", label:"BOA", icon:"🟡" };
+  if (score >= 60) return { cls:"interesting", label:"MODERADA", icon:"🟠" };
+  return { cls:"interesting", label:"FRACA", icon:"🔴" };
 }
 
 function historicoMercado(market) {
