@@ -1,6 +1,6 @@
-# Painel Avançado Multibancas — V1.4.22
+# Painel Avançado Multibancas — V1.4.23
 
-V1.4.22 mantém o algoritmo e a calibração e acrescenta protecção da quota da API-Football.
+V1.4.23 mantém o algoritmo e a calibração e acrescenta protecção da quota da API-Football.
 
 ## Alterações
 - Detecta automaticamente o limite diário da API-Football.
@@ -11,3 +11,11 @@ V1.4.22 mantém o algoritmo e a calibração e acrescenta protecção da quota d
 - A API devolve HTTP 429 quando o limite diário é atingido.
 - A quota apresentada no diagnóstico é actualizada com o último pedido efectuado.
 - Mantém cache de 30 minutos e no máximo 6 chamadas por execução (fixtures + até 5 predictions).
+
+
+## Laboratório V1.4.23
+- Ambiente isolado em localStorage separado (`painel_v1423_laboratorio`).
+- Gera 12 resultados de teste sem chamar a API-Football.
+- Permite alternar Ganha/Perdida/Pendente.
+- Mostra acerto, confiança média e diferença real-prevista.
+- Não contamina o histórico/calibração reais.
