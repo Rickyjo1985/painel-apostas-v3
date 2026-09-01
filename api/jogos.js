@@ -63,9 +63,12 @@ async function apiFetch(path,params={}){
   }
   return {response:Array.isArray(data.response)?data.response:[],remaining,limit,results:num(data.results)||0};
 }
+function isDailyQuotaError(message){
+  return /request limit for the day|limit for the day|daily limit|quota.*(day|daily)|reached.*limit.*day|limite diário|quota diária/i.test(String(message||""));
+}
 async function optionalApi(path,params,force=false,ttl=CACHE_TTL_MS){
-  try{ const x=await cached(`v1415:${path}:${JSON.stringify(params)}`,()=>apiFetch(path,params),force,ttl); return {ok:true,...x,error:null}; }
-  catch(err){ return {ok:false,response:[],remaining:err.remaining||null,limit:err.limit||null,error:err.message,status:err.status||null}; }
+  try{ const x=await cached(`v1422:${path}:${JSON.stringify(params)}`,()=>apiFetch(path,params),force,ttl); return {ok:true,...x,error:null}; }
+  catch(err){ return {ok:false,response:[],remaining:err.remaining||null,limit:err.limit||null,error:err.message,status:err.status||null,dailyQuota:isDailyQuotaError(err.message)}; }
 }
 function leagueInfo(f){
   const id=f.league?.id; if(PRIORITY_LEAGUES.has(id))return PRIORITY_LEAGUES.get(id);
@@ -312,13 +315,22 @@ export default async function handler(req,res){
       const upcoming=fixtures.filter(f=>["NS","TBD"].includes(f.fixture?.status?.short)&&!BLOCKED.test(f.league?.name||""));
       const prelim=upcoming.map(f=>({f,league:leagueInfo(f)})).filter(x=>x.league);
       const candidates=prelim.sort((a,b)=>(b.league.weight-a.league.weight)||(new Date(a.f.fixture.date)-new Date(b.f.fixture.date))).slice(0,MAX_PREDICTIONS);
-      const out=[], diagnostics={quotaRemaining:fixtureCall.remaining,quotaLimit:fixtureCall.limit,fixtures:{ok:true,results:fixtureCall.results},predictionsRequested:candidates.length,rateLimitStrategy:"máx. 6 chamadas por execução; pedidos sequenciais; sem fan-out de endpoints",competitions:[]};
+      let quotaRemaining = fixtureCall.remaining != null ? Number(fixtureCall.remaining) : null;
+      const quotaLimit = fixtureCall.limit != null ? Number(fixtureCall.limit) : null;
+      const out=[], diagnostics={quotaRemaining,quotaLimit,fixtures:{ok:true,results:fixtureCall.results},predictionsRequested:candidates.length,rateLimitStrategy:"máx. 6 chamadas por execução; pedidos sequenciais; sem fan-out de endpoints; cache 30 min",competitions:[]};
       let lastRequestAt=Date.now();
       for(let i=0;i<candidates.length;i++){
         const {f,league}=candidates[i];
         const wait=Math.max(0,650-(Date.now()-lastRequestAt)); if(wait) await sleep(wait);
         const pr=await optionalApi("/predictions",{fixture:f.fixture.id},force);
         lastRequestAt=Date.now();
+        if (pr.remaining != null) quotaRemaining = Number(pr.remaining);
+        diagnostics.quotaRemaining = quotaRemaining;
+        if (!pr.ok && pr.dailyQuota) {
+          const err = new Error(pr.error || "API-Football atingiu o limite diário.");
+          err.status = 429; err.remaining = pr.remaining; err.limit = pr.limit;
+          throw err;
+        }
         const row=pr.response?.[0]||null, p=predictionData(row);
         const h2Rows=historyFromPrediction(row,f.teams.home.id), h2=h2hFeatures(h2Rows);
         // Predictions already contain comparison/context from the API, including recent form and H2H.
@@ -350,6 +362,16 @@ export default async function handler(req,res){
       const recommendable=out.filter(g=>g.evidenceCount>=3 && g.suggestion.market!=="none" && g.score>=50), games=recommendable.slice(0,TOP_LIMIT);
       return {fixturesFound:fixtures.length,candidates:candidates.length,analyzedCount:out.length,failures:out.length-candidates.length+0,recommendable:recommendable.length,games,all:out,diagnostics};
     },force);
-    res.status(200).json({ok:true,version:"1.4.18",date,dateLabel:labelDate(date),fixturesFound:result.fixturesFound,candidates:result.candidates,analyzed:result.analyzedCount,recommendable:result.recommendable,selected:result.games.length,games:result.games,diagnostics:result.diagnostics,cached:!force});
-  }catch(e){ console.error(e); res.status(500).json({ok:false,error:e.message||"Erro ao analisar jogos."}); }
+    res.status(200).json({ok:true,version:"1.4.22",date,dateLabel:labelDate(date),fixturesFound:result.fixturesFound,candidates:result.candidates,analyzed:result.analyzedCount,recommendable:result.recommendable,selected:result.games.length,games:result.games,diagnostics:result.diagnostics,cached:!force});
+  }catch(e){
+    console.error(e);
+    const daily = isDailyQuotaError(e.message) || Number(e.status) === 429;
+    res.status(daily ? 429 : 500).json({
+      ok:false,
+      error:daily ? "API-Football: atingiu o limite diário de pedidos." : (e.message||"Erro ao analisar jogos."),
+      quotaRemaining:e.remaining ?? null,
+      quotaLimit:e.limit ?? null,
+      quotaExceeded:daily
+    });
+  }
 }
