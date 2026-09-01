@@ -247,8 +247,11 @@ function guardarSugestao(id) {
   historicoSugestoes.unshift({
     id:j.id, date:j.kickoff?.slice(0,10) || new Date().toISOString().slice(0,10),
     kickoff:j.kickoff, home:j.home, away:j.away, league:j.league,
-    market:j.suggestion.market, label:j.suggestion.label,
-    confidence:j.suggestion.confidence, score:j.score, scoreBucket:faixaScore(j.score),
+    market:j.suggestion.market, label:j.suggestion.label, reason:j.suggestion.reason,
+    confidence:j.suggestion.confidence, rawConfidence:j.rawConfidence ?? j.suggestion.confidence,
+    score:j.score, rawScore:j.rawScore ?? j.score, scoreBucket:faixaScore(j.score),
+    metrics:j.metrics || {}, dataPoints:j.dataPoints || {}, coverage:j.coverage || {},
+    evidenceCount:j.evidenceCount ?? null, dataQuality:j.dataQuality || "unknown",
     resultado:"pendente", savedAt:new Date().toISOString()
   });
   localStorage.setItem(HIST_KEY, JSON.stringify(historicoSugestoes));
@@ -258,6 +261,15 @@ function guardarSugestao(id) {
 
 function atualizarResultado(id, resultado) {
   historicoSugestoes = historicoSugestoes.map(x => String(x.id) === String(id) ? {...x, resultado, resolvedAt:new Date().toISOString()} : x);
+  localStorage.setItem(HIST_KEY, JSON.stringify(historicoSugestoes));
+  renderizarHistorico();
+  renderizarCalibracao();
+  baseJogos = calibrarJogos(baseJogos);
+  renderizarJogos();
+}
+
+function reabrirResultado(id) {
+  historicoSugestoes = historicoSugestoes.map(x => String(x.id) === String(id) ? {...x, resultado:"pendente", resolvedAt:null} : x);
   localStorage.setItem(HIST_KEY, JSON.stringify(historicoSugestoes));
   renderizarHistorico();
   renderizarCalibracao();
@@ -365,12 +377,13 @@ function renderizarHistorico() {
         <div class="history-row">
           <div>
             <b>${escapeHtml(x.home)} vs ${escapeHtml(x.away)}</b>
-            <small>${escapeHtml(x.league)} · ${escapeHtml(x.label)} · Score ${x.score} · Confiança ${x.confidence}%</small>
+            <small>${escapeHtml(x.league)} · ${escapeHtml(x.label)} · Score ${x.score} · Confiança ${x.confidence}% · Faixa ${escapeHtml(x.scoreBucket || faixaScore(x.score))}</small>
+            <small>Guardada: ${new Date(x.savedAt).toLocaleDateString("pt-PT")}${x.resolvedAt ? ` · Resultado: ${new Date(x.resolvedAt).toLocaleDateString("pt-PT")}` : ""}</small>
           </div>
           <div class="history-actions">
             <button class="result-btn ${x.resultado==="ganha"?"selected":""}" onclick="atualizarResultado('${jsQuote(x.id)}','ganha')">✓ Ganha</button>
             <button class="result-btn ${x.resultado==="perdida"?"selected":""}" onclick="atualizarResultado('${jsQuote(x.id)}','perdida')">✕ Perdida</button>
-            ${x.resultado==="pendente" ? `<span class="pending-badge">⏳ Pendente</span>` : ""}
+            ${x.resultado==="pendente" ? `<span class="pending-badge">⏳ Pendente</span>` : `<button class="result-btn" onclick="reabrirResultado('${jsQuote(x.id)}')">↩ Pendente</button>`}
             <button class="delete-history" onclick="removerHistorico('${jsQuote(x.id)}')">×</button>
           </div>
         </div>`).join("")}
@@ -403,6 +416,13 @@ function renderizarCalibracao() {
         items.forEach(x=>{ const b=x.scoreBucket||faixaScore(x.score); if(!buckets[b]) buckets[b]=[]; buckets[b].push(x); });
         const faixaInfo=Object.entries(buckets).sort((a,b)=>b[1].length-a[1].length).map(([b,v])=>`${b}: ${v.length}`).join(" · ");
         return `<div class="ct-row"><span>${escapeHtml(items[0].label)}<small>${escapeHtml(faixaInfo)}</small></span><span>${items.length}</span><span>${rate}%</span><span>${items.length>=5?"🟢 A calibrar":"⚪ A recolher dados"}</span></div>`;
+      }).join("")}</div>
+      <h4 class="calibration-subtitle">📈 Acerto por faixa de Score</h4>
+      <div class="calibration-table"><div class="ct-head"><span>Faixa</span><span>Amostra</span><span>Acerto</span><span>Estado</span></div>${["80+","70-79","60-69","50-59","<50"].map(bucket=>{
+        const items=resolved.filter(x=>(x.scoreBucket||faixaScore(x.score))===bucket);
+        const wins=items.filter(x=>x.resultado==="ganha").length;
+        const rate=items.length?Math.round(wins/items.length*100):null;
+        return `<div class="ct-row"><span><b>${bucket}</b></span><span>${items.length}</span><span>${rate==null?"—":rate+"%"}</span><span>${items.length>=5?"🟢 Amostra útil":"⚪ ${items.length}/5"}</span></div>`;
       }).join("")}</div>` : `<div class="history-empty">Ainda não há resultados avaliados.</div>`}
     </div>`;
 }
