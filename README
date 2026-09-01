@@ -17,4 +17,7 @@ V1.4.18 transforma o Histórico numa base de dados local mais completa para a ca
 4. Usar a aba Calibração para acompanhar quando cada faixa atingir a amostra mínima.
 
 
-V1.4.20: correção dos separadores Histórico e Calibração. Os IDs dos botões passam a corresponder aos IDs usados por mostrarSubAbaJogos(), permitindo alternar e renderizar corretamente as duas vistas.
+V1.4.21: correção dos separadores Histórico e Calibração. Os IDs dos botões passam a corresponder aos IDs usados por mostrarSubAbaJogos(), permitindo alternar e renderizar corretamente as duas vistas.
+
+
+V1.4.21: corrige o mapeamento dos painéis Histórico/Calibração e remove o cursor de espera dos botões Guardar já desativados.
