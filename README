@@ -1,10 +1,17 @@
-# Painel Avançado Multibancas — V1.4.17
+# Painel Avançado Multibancas — V1.4.18
 
-V1.4.17 adiciona calibração histórica por faixa de Score, mantendo a V1.4.16 como base.
+V1.4.18 transforma o Histórico numa base de dados local mais completa para a calibração real do modelo.
 
 ## Novidades
-- Histórico guarda também a faixa de Score da sugestão.
-- Calibração prefere mercado + faixa de Score quando existem pelo menos 5 resultados.
-- Sem amostra suficiente, usa histórico do mercado; antes de 5 resultados mantém o valor inicial.
-- O painel mostra a origem da calibração e a distribuição das faixas no separador Calibração.
-- Não altera a API nem adiciona chamadas externas.
+- Cada sugestão guardada mantém um snapshot dos sinais, Score, confiança, explicação, qualidade dos dados e cobertura.
+- Histórico com estado Pendente / Ganha / Perdida e possibilidade de reabrir um resultado.
+- Datas de guarda e resolução visíveis.
+- Calibração mostra acerto global, por mercado e por faixa de Score.
+- A faixa de Score só passa a ser considerada amostra útil para calibração a partir de 5 resultados avaliados.
+- Não adiciona chamadas externas nem altera a quota da API.
+
+## Fluxo recomendado
+1. Guardar as oportunidades que quer acompanhar.
+2. Depois do jogo, marcar Ganha ou Perdida.
+3. Deixar o histórico acumular amostras.
+4. Usar a aba Calibração para acompanhar quando cada faixa atingir a amostra mínima.
