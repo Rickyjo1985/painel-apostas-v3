@@ -1,4 +1,4 @@
-# Painel Avançado Multibancas — V1.4.24
+# Painel Avançado Multibancas — V1.4.25
 
 V1.4.23 mantém o algoritmo e a calibração e acrescenta protecção da quota da API-Football.
 
@@ -21,5 +21,5 @@ V1.4.23 mantém o algoritmo e a calibração e acrescenta protecção da quota d
 - Não contamina o histórico/calibração reais.
 
 
-## V1.4.24 — calibração adaptativa do Score
+## V1.4.25 — calibração adaptativa do Score
 A calibração usa apenas resultados reais do histórico. Com pelo menos 5 resultados no mesmo mercado/faixa, o Score pode receber um ajuste progressivo baseado na diferença entre acerto real e confiança prevista, limitado para evitar oscilações. Antes da amostra mínima, o Score mantém-se inalterado. O Laboratório continua isolado e não alimenta a calibração real.
