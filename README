@@ -105,3 +105,15 @@ A V1.3 usa API-Football como fonte de dados e ordena os jogos por um score próp
 - Os candidatos analisados são sempre ordenados por Score; a qualidade dos dados continua visível.
 - A resposta distingue candidatos encontrados de candidatos efectivamente processados.
 - Cada jogo expõe os pontos de dados usados (histórico, H2H, Prediction e classificação).
+
+
+## V1.4.8 — cobertura, época correcta e qualidade dos dados
+- Consulta `/leagues?id=...&season=...` por competição para descobrir a season correcta e o objecto `coverage`.
+- Só pede `standings` quando `coverage.standings` está activo e só pede `predictions` quando `coverage.predictions` está activo.
+- Guarda a cobertura por 24 horas para reduzir consumo de quota.
+- A classificação dos jogos passa a considerar primeiro a quantidade de evidência real e depois o Score.
+- Jogos com pelo menos 3 sinais de evidência são preferidos; se não houver nenhum, o painel mostra os melhores disponíveis mas marca-os como dados insuficientes/limitados.
+- Os fallbacks de 50% continuam apenas como valores neutros de cálculo; deixam de ser apresentados como se fossem dados reais.
+- A resposta inclui diagnóstico de quota restante, cobertura da competição, season usada e erros dos endpoints opcionais.
+- Foram removidas chamadas de `/teams/statistics` nesta fase para reduzir consumo de quota; forma recente + standings + H2H + predictions são a base do modelo.
+- A documentação oficial da API-Football recomenda verificar `coverage` antes de chamar endpoints dependentes de uma determinada competição/época e cachear esta informação.
