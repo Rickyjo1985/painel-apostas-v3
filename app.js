@@ -168,10 +168,28 @@ function nivelScore(score) {
   return { cls:"interesting", label:"FRACA", icon:"🔴" };
 }
 
+function resultadoBinario(x) { return x.resultado === "ganha" ? 1 : 0; }
+
 function historicoMercado(market) {
   const rows = historicoSugestoes.filter(x => x.market === market && x.resultado !== "pendente");
   const wins = rows.filter(x => x.resultado === "ganha").length;
-  return { n: rows.length, wins, rate: rows.length ? wins / rows.length * 100 : null };
+  const avgConfidence = rows.length
+    ? rows.reduce((sum, x) => sum + clamp(x.confidence ?? x.rawConfidence ?? 50), 0) / rows.length
+    : null;
+  const brier = rows.length
+    ? rows.reduce((sum, x) => {
+        const p = clamp(x.confidence ?? x.rawConfidence ?? 50) / 100;
+        return sum + Math.pow(p - resultadoBinario(x), 2);
+      }, 0) / rows.length
+    : null;
+  return {
+    n: rows.length,
+    wins,
+    rate: rows.length ? wins / rows.length * 100 : null,
+    avgConfidence,
+    brier,
+    gap: rows.length ? (wins / rows.length * 100) - avgConfidence : null
+  };
 }
 
 function faixaScore(score) {
@@ -191,7 +209,17 @@ function historicoFaixa(market, score) {
     x.resultado !== "pendente"
   );
   const wins = rows.filter(x => x.resultado === "ganha").length;
-  return { n: rows.length, wins, rate: rows.length ? wins / rows.length * 100 : null, faixa };
+  const avgConfidence = rows.length
+    ? rows.reduce((sum, x) => sum + clamp(x.confidence ?? x.rawConfidence ?? 50), 0) / rows.length
+    : null;
+  return {
+    n: rows.length,
+    wins,
+    rate: rows.length ? wins / rows.length * 100 : null,
+    faixa,
+    avgConfidence,
+    gap: rows.length ? (wins / rows.length * 100) - avgConfidence : null
+  };
 }
 
 function calibrarConfianca(raw, market, score) {
@@ -201,26 +229,29 @@ function calibrarConfianca(raw, market, score) {
   let source = "inicial";
   let sample = h.n;
   let rate = h.rate;
+  let gap = h.gap;
 
-  // Primeiro usamos o histórico específico da combinação mercado + faixa de Score
-  // quando existe uma amostra mínima. Isto evita que um Score 55 seja calibrado
-  // como um Score 80 só porque pertencem ao mesmo mercado.
+  // A faixa específica só entra com amostra mínima. A taxa observada é
+  // suavizada para evitar que poucas ocorrências façam a confiança oscilar demasiado.
   if (hb.n >= 5) {
     const empirical = 50 + (hb.rate - 50) * Math.min(1, hb.n / 20);
-    confidence = Math.round(clamp(.70 * confidence + .30 * empirical));
+    confidence = Math.round(clamp(.65 * confidence + .35 * empirical));
     source = `score ${hb.faixa}`;
     sample = hb.n;
     rate = hb.rate;
+    gap = hb.gap;
   } else if (h.n >= 5) {
     const empirical = 50 + (h.rate - 50) * Math.min(1, h.n / 20);
-    confidence = Math.round(clamp(.82 * confidence + .18 * empirical));
+    confidence = Math.round(clamp(.78 * confidence + .22 * empirical));
     source = "mercado";
+    sample = h.n;
+    rate = h.rate;
+    gap = h.gap;
   }
 
-  // A confiança não pode ficar muito acima do Score. São métricas diferentes,
-  // mas uma oportunidade média não deve parecer quase certa.
+  // A confiança nunca pode ficar muito acima do Score.
   confidence = Math.min(confidence, Math.min(95, Math.round(score + 12)));
-  return { confidence, sample, rate, source, bucket:hb.faixa };
+  return { confidence, sample, rate, source, bucket: hb.faixa, gap };
 }
 
 function calibrarJogos(games) {
@@ -401,29 +432,43 @@ function renderizarCalibracao() {
   });
   const rows=Object.entries(byMarket).sort((a,b)=>b[1].length-a[1].length);
   const overall=resolved.length ? Math.round(resolved.filter(x=>x.resultado==="ganha").length/resolved.length*100) : null;
+  const avgPred=resolved.length ? Math.round(resolved.reduce((s,x)=>s+clamp(x.confidence ?? x.rawConfidence ?? 50),0)/resolved.length) : null;
+  const gap=overall==null || avgPred==null ? null : overall-avgPred;
+  const gapLabel = gap==null ? "—" : Math.abs(gap)<=5 ? "🟢 Bem calibrado" : gap>0 ? "🟡 Conservador" : "🟠 Sobreconfiante";
+
+  const bucketRows=["80+","70-79","60-69","50-59","<50"].map(bucket=>{
+    const items=resolved.filter(x=>(x.scoreBucket||faixaScore(x.score))===bucket);
+    const wins=items.filter(x=>x.resultado==="ganha").length;
+    const rate=items.length?Math.round(wins/items.length*100):null;
+    const pred=items.length?Math.round(items.reduce((s,x)=>s+clamp(x.confidence ?? x.rawConfidence ?? 50),0)/items.length):null;
+    const diff=rate==null||pred==null?null:rate-pred;
+    return {bucket,n:items.length,rate,pred,diff};
+  });
+
   c.innerHTML=`
     <div class="calibration-panel">
-      <h3>📊 Calibração do modelo</h3>
-      <p>A calibração começa com <b>5 resultados avaliados</b>. Quando houver amostra suficiente, o sistema prefere o histórico do <b>mesmo mercado + faixa de Score</b>; caso contrário usa o histórico do mercado. Antes disso, mantém o valor original.</p>
+      <h3>📊 Calibração real do modelo</h3>
+      <p>A confiança passa a ser comparada com o resultado real. O sistema só usa uma calibração automática depois de <b>5 resultados avaliados</b>. A prioridade é <b>mercado + faixa de Score</b>; depois mercado; antes disso mantém a confiança inicial.</p>
       <div class="history-summary">
-        <div><strong>${overall==null?"—":overall+"%"}</strong><small>Acerto global</small></div>
-        <div><strong>${resolved.length}</strong><small>Resultados</small></div>
-        <div><strong>${Object.keys(byMarket).length}</strong><small>Mercados avaliados</small></div>
+        <div><strong>${overall==null?"—":overall+"%"}</strong><small>Acerto real</small></div>
+        <div><strong>${avgPred==null?"—":avgPred+"%"}</strong><small>Confiança média prevista</small></div>
+        <div><strong>${gap==null?"—":(gap>0?"+":"")+gap+" pp"}</strong><small>Diferença real − prevista</small></div>
+        <div><strong>${resolved.length}</strong><small>Resultados avaliados</small></div>
       </div>
+      <div class="calibration-status"><b>${gapLabel}</b><span>${resolved.length<5?`Ainda faltam ${5-resolved.length} resultados para activar a calibração.`:"Amostra mínima global atingida; cada mercado/faixa continua a exigir a sua própria amostra."}</span></div>
       ${rows.length ? `<div class="calibration-table"><div class="ct-head"><span>Mercado</span><span>Amostra</span><span>Acerto</span><span>Estado</span></div>${rows.map(([market,items])=>{
         const wins=items.filter(x=>x.resultado==="ganha").length, rate=Math.round(wins/items.length*100);
+        const avg=Math.round(items.reduce((s,x)=>s+clamp(x.confidence ?? x.rawConfidence ?? 50),0)/items.length);
+        const diff=rate-avg;
         const buckets={};
         items.forEach(x=>{ const b=x.scoreBucket||faixaScore(x.score); if(!buckets[b]) buckets[b]=[]; buckets[b].push(x); });
         const faixaInfo=Object.entries(buckets).sort((a,b)=>b[1].length-a[1].length).map(([b,v])=>`${b}: ${v.length}`).join(" · ");
-        return `<div class="ct-row"><span>${escapeHtml(items[0].label)}<small>${escapeHtml(faixaInfo)}</small></span><span>${items.length}</span><span>${rate}%</span><span>${items.length>=5?"🟢 A calibrar":"⚪ A recolher dados"}</span></div>`;
-      }).join("")}</div>
-      <h4 class="calibration-subtitle">📈 Acerto por faixa de Score</h4>
-      <div class="calibration-table"><div class="ct-head"><span>Faixa</span><span>Amostra</span><span>Acerto</span><span>Estado</span></div>${["80+","70-79","60-69","50-59","<50"].map(bucket=>{
-        const items=resolved.filter(x=>(x.scoreBucket||faixaScore(x.score))===bucket);
-        const wins=items.filter(x=>x.resultado==="ganha").length;
-        const rate=items.length?Math.round(wins/items.length*100):null;
-        return `<div class="ct-row"><span><b>${bucket}</b></span><span>${items.length}</span><span>${rate==null?"—":rate+"%"}</span><span>${items.length>=5?"🟢 Amostra útil":"⚪ ${items.length}/5"}</span></div>`;
+        return `<div class="ct-row"><span>${escapeHtml(market)}<small>${escapeHtml(faixaInfo)} · média prevista ${avg}% · ${diff>0?"+":""}${diff} pp</small></span><span>${items.length}</span><span>${rate}%</span><span>${items.length>=5?"🟢 Calibrável":"⚪ A recolher dados"}</span></div>`;
       }).join("")}</div>` : `<div class="history-empty">Ainda não há resultados avaliados.</div>`}
+      <h4 class="calibration-subtitle">📈 Precisão por faixa de Score</h4>
+      <div class="calibration-table"><div class="ct-head"><span>Faixa</span><span>Amostra</span><span>Real / previsto</span><span>Estado</span></div>${bucketRows.map(r=>`
+        <div class="ct-row"><span><b>${r.bucket}</b></span><span>${r.n}</span><span>${r.rate==null?"—":`${r.rate}% / ${r.pred}% (${r.diff>0?"+":""}${r.diff} pp)`}</span><span>${r.n>=5?"🟢 Amostra útil":`⚪ ${r.n}/5`}</span></div>`).join("")}</div>
+      <div class="calibration-help"><b>Como ler:</b> <span>+5 pp significa que o modelo acertou 5 pontos percentuais acima da confiança média. Valores negativos indicam que a confiança estava demasiado alta.</span></div>
     </div>`;
 }
 
