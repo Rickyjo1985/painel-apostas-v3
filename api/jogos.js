@@ -64,7 +64,7 @@ async function apiFetch(path,params={}){
   return {response:Array.isArray(data.response)?data.response:[],remaining,limit,results:num(data.results)||0};
 }
 async function optionalApi(path,params,force=false,ttl=CACHE_TTL_MS){
-  try{ const x=await cached(`v1412:${path}:${JSON.stringify(params)}`,()=>apiFetch(path,params),force,ttl); return {ok:true,...x,error:null}; }
+  try{ const x=await cached(`v1413:${path}:${JSON.stringify(params)}`,()=>apiFetch(path,params),force,ttl); return {ok:true,...x,error:null}; }
   catch(err){ return {ok:false,response:[],remaining:err.remaining||null,limit:err.limit||null,error:err.message,status:err.status||null}; }
 }
 function leagueInfo(f){
@@ -170,6 +170,15 @@ function marketReason(label,h,a,h2,p){
   if(h.winRate!=null&&a.winRate!=null&&(label.includes("casa")||label.includes("fora")))add(`Forma: ${Math.round(h.winRate)}% vs ${Math.round(a.winRate)}%`);
   return bits.slice(0,3).join("; ")||"Sem evidência suficiente para uma recomendação forte.";
 }
+function marketStrength(m,p,comp){
+  const side = m.market.includes("Away") || m.market === "awayWin" ? "away" : m.market.includes("Home") || m.market === "homeWin" ? "home" : null;
+  if(!side || !p) return 0;
+  const formDiff = comp.homeForm!=null&&comp.awayForm!=null ? (side==="home" ? comp.homeForm-comp.awayForm : comp.awayForm-comp.homeForm) : 0;
+  const attackDiff = comp.homeAttack!=null&&comp.awayAttack!=null ? (side==="home" ? comp.homeAttack-comp.awayAttack : comp.awayAttack-comp.homeAttack) : 0;
+  const defenseDiff = comp.homeDefense!=null&&comp.awayDefense!=null ? (side==="home" ? comp.homeDefense-comp.awayDefense : comp.awayDefense-comp.homeDefense) : 0;
+  const h2hDiff = comp.homeH2H!=null&&comp.awayH2H!=null ? (side==="home" ? comp.homeH2H-comp.awayH2H : comp.awayH2H-comp.homeH2H) : 0;
+  return [formDiff,attackDiff,defenseDiff,h2hDiff].filter(v=>v>=4).length;
+}
 function buildMarkets(h,a,h2,p,evidence){
   const validPred=predictionValid(p);
   const comp=p.comparison||{};
@@ -178,39 +187,68 @@ function buildMarkets(h,a,h2,p,evidence){
   const markets=[];
   const homeSupport=signalSupport(p,comp);
   const awaySupport=signalSupportAway(p,comp);
+  const homeDirectional=marketStrength({market:"doubleHome"},p,comp);
+  const awayDirectional=marketStrength({market:"doubleAway"},p,comp);
   const degenerate=validPred&&[home,draw,away].some(v=>v<=1);
+
   if(validPred){
     const dcHome=home+draw, dcAway=away+draw;
-    if(dcHome>=65 && (homeSupport.length>=1 || home>=55) && (!degenerate || homeSupport.length>=2)) {
-      markets.push({market:"doubleHome",label:"Dupla possibilidade: casa ou empate",confidence:Math.round(clamp(dcHome-(degenerate?12:0)+Math.min(8,homeSupport.length*2))),support:homeSupport});
+    // A double chance is not considered strong merely because home+draw is large.
+    // It needs at least one independent directional signal for the selected side,
+    // unless the prediction itself gives that side a clear edge.
+    if(dcHome>=70 && (home>=55 || homeDirectional>=1) && (!degenerate || homeDirectional>=2)) {
+      const conf=dcHome + Math.min(8,homeDirectional*2) - (homeDirectional===0?8:0);
+      markets.push({market:"doubleHome",label:"Dupla possibilidade: casa ou empate",confidence:Math.round(clamp(conf)),support:homeSupport});
     }
-    if(dcAway>=65 && (awaySupport.length>=1 || away>=55) && (!degenerate || awaySupport.length>=2)) {
-      markets.push({market:"doubleAway",label:"Dupla possibilidade: fora ou empate",confidence:Math.round(clamp(dcAway-(degenerate?12:0)+Math.min(8,awaySupport.length*2))),support:awaySupport});
+    if(dcAway>=70 && (away>=55 || awayDirectional>=1) && (!degenerate || awayDirectional>=2)) {
+      const conf=dcAway + Math.min(8,awayDirectional*2) - (awayDirectional===0?8:0);
+      markets.push({market:"doubleAway",label:"Dupla possibilidade: fora ou empate",confidence:Math.round(clamp(conf)),support:awaySupport});
     }
-    if(home>=55 && home-Math.max(away,draw)>=8 && homeSupport.length>=1 && !degenerate) {
-      markets.push({market:"homeWin",label:"Vitória da equipa da casa",confidence:Math.round(clamp(home+Math.min(8,homeSupport.length*2))),support:homeSupport});
+    if(home>=57 && home-Math.max(away,draw)>=10 && homeDirectional>=1 && !degenerate) {
+      markets.push({market:"homeWin",label:"Vitória da equipa da casa",confidence:Math.round(clamp(home+Math.min(8,homeDirectional*2))),support:homeSupport});
     }
-    if(away>=55 && away-Math.max(home,draw)>=8 && awaySupport.length>=1 && !degenerate) {
-      markets.push({market:"awayWin",label:"Vitória da equipa visitante",confidence:Math.round(clamp(away+Math.min(8,awaySupport.length*2))),support:awaySupport});
+    if(away>=57 && away-Math.max(home,draw)>=10 && awayDirectional>=1 && !degenerate) {
+      markets.push({market:"awayWin",label:"Vitória da equipa visitante",confidence:Math.round(clamp(away+Math.min(8,awayDirectional*2))),support:awaySupport});
     }
   }
-  if(goals.over15!=null && goals.over15>=64 && (p.homeGoals!=null||h2.n>=2)) markets.push({market:"over15",label:"Mais de 1,5 golos",confidence:Math.round(clamp(goals.over15)),support:["golos"]});
-  if(goals.over25!=null && goals.over25>=64 && p.homeGoals!=null) markets.push({market:"over25",label:"Mais de 2,5 golos",confidence:Math.round(clamp(goals.over25)),support:["golos"]});
+  if(goals.over15!=null && goals.over15>=66 && (p.homeGoals!=null||h2.n>=2)) markets.push({market:"over15",label:"Mais de 1,5 golos",confidence:Math.round(clamp(goals.over15)),support:["golos"]});
+  if(goals.over25!=null && goals.over25>=66 && p.homeGoals!=null) markets.push({market:"over25",label:"Mais de 2,5 golos",confidence:Math.round(clamp(goals.over25)),support:["golos"]});
   const cap=evidence>=5?92:evidence===4?88:evidence===3?82:evidence===2?74:62;
   return markets.map(m=>({...m,confidence:Math.round(clamp(Math.min(m.confidence,cap)))})).sort((x,y)=>y.confidence-x.confidence);
 }
+function marketAgreement(best,p,comp,h2){
+  if(!best || best.market==="none") return 0;
+  if(best.market==="over15" || best.market==="over25"){
+    const vals=[];
+    if(best.market==="over15" && p.homeGoals!=null&&p.awayGoals!=null) vals.push(p.homeGoals+p.awayGoals>=1.9);
+    if(best.market==="over25" && p.homeGoals!=null&&p.awayGoals!=null) vals.push(p.homeGoals+p.awayGoals>=2.9);
+    if(best.market==="over15" && h2.o15!=null) vals.push(h2.o15>=60);
+    if(best.market==="over25" && h2.o25!=null) vals.push(h2.o25>=55);
+    return vals.length ? 50 + (vals.filter(Boolean).length/vals.length)*45 : 50;
+  }
+  const side=best.market.includes("Home")||best.market==="homeWin"?"home":best.market.includes("Away")||best.market==="awayWin"?"away":null;
+  if(!side) return 50;
+  const diffs=[];
+  if(comp.homeForm!=null&&comp.awayForm!=null) diffs.push(side==="home"?comp.homeForm-comp.awayForm:comp.awayForm-comp.homeForm);
+  if(comp.homeAttack!=null&&comp.awayAttack!=null) diffs.push(side==="home"?comp.homeAttack-comp.awayAttack:comp.awayAttack-comp.homeAttack);
+  if(comp.homeDefense!=null&&comp.awayDefense!=null) diffs.push(side==="home"?comp.homeDefense-comp.awayDefense:comp.awayDefense-comp.homeDefense);
+  if(comp.homeH2H!=null&&comp.awayH2H!=null) diffs.push(side==="home"?comp.homeH2H-comp.awayH2H:comp.awayH2H-comp.homeH2H);
+  if(!diffs.length) return 50;
+  const positive=diffs.filter(v=>v>=4).length, negative=diffs.filter(v=>v<=-4).length;
+  return Math.round(clamp(50 + positive*12 - negative*16));
+}
 function scoreGame(h,a,h2,p,leagueWeight,evidence,best){
   if(!best)return 0;
-  const pred=best.confidence;
   const comp=p.comparison||{};
+  const agreement=marketAgreement(best,p,comp,h2);
   const support=Array.isArray(best.support)?best.support.length:0;
-  const agreement=avg([comp.homeForm,comp.awayForm,comp.homeAttack,comp.awayAttack,comp.homeDefense,comp.awayDefense].filter(v=>v!=null))??50;
-  const h2Signal=h2.n>=2?Math.max(h2.o15??50,h2.o25??50):50;
   const evidenceFactor=evidence>=5?1:evidence===4?.96:evidence===3?.91:evidence===2?.82:.65;
-  const supportFactor=1+Math.min(.06,support*.02);
-  const raw=.62*pred+.18*agreement+.10*h2Signal+.10*(evidence*16.67);
-  return Math.round(clamp(raw*leagueWeight*evidenceFactor*supportFactor));
+  const predictionConfidence=clamp(best.confidence);
+  const supportBonus=Math.min(8,support*2);
+  const raw=.58*predictionConfidence+.24*agreement+.10*(evidence*16.67)+.08*(50+supportBonus);
+  return Math.round(clamp(raw*leagueWeight*evidenceFactor));
 }
+
 function quality(n){ if(n>=5)return "high"; if(n>=3)return "medium"; if(n>=1)return "low"; return "insufficient"; }
 
 function diagnosticFromCall(label,params,call,requested=true){
@@ -223,7 +261,7 @@ function diagnosticFromCall(label,params,call,requested=true){
 export default async function handler(req,res){
   try{
     const date=dateInLisbon(), force=String(req?.query?.force||"")==="1";
-    const result=await cached(`v1412:${date}`,async()=>{
+    const result=await cached(`v1413:${date}`,async()=>{
       const fixtureCall=await apiFetch("/fixtures",{date,timezone:"Europe/Lisbon"});
       const fixtures=fixtureCall.response;
       const upcoming=fixtures.filter(f=>["NS","TBD"].includes(f.fixture?.status?.short)&&!BLOCKED.test(f.league?.name||""));
@@ -267,6 +305,6 @@ export default async function handler(req,res){
       const recommendable=out.filter(g=>g.evidenceCount>=3 && g.suggestion.market!=="none" && g.score>=50), games=recommendable.slice(0,TOP_LIMIT);
       return {fixturesFound:fixtures.length,candidates:candidates.length,analyzedCount:out.length,failures:out.length-candidates.length+0,recommendable:recommendable.length,games,all:out,diagnostics};
     },force);
-    res.status(200).json({ok:true,version:"1.4.12",date,dateLabel:labelDate(date),fixturesFound:result.fixturesFound,candidates:result.candidates,analyzed:result.analyzedCount,recommendable:result.recommendable,selected:result.games.length,games:result.games,diagnostics:result.diagnostics,cached:!force});
+    res.status(200).json({ok:true,version:"1.4.13",date,dateLabel:labelDate(date),fixturesFound:result.fixturesFound,candidates:result.candidates,analyzed:result.analyzedCount,recommendable:result.recommendable,selected:result.games.length,games:result.games,diagnostics:result.diagnostics,cached:!force});
   }catch(e){ console.error(e); res.status(500).json({ok:false,error:e.message||"Erro ao analisar jogos."}); }
 }
