@@ -288,21 +288,23 @@ function calibrarConfianca(raw, market, score) {
   const hb = historicoFaixa(market, score);
   let confidence = Math.round(clamp(raw));
   let source = "inicial";
-  let sample = h.n;
-  let rate = h.rate;
-  let gap = h.gap;
+  let sample = 0;
+  let rate = null;
+  let gap = null;
 
-  // A faixa específica só entra com amostra mínima. A taxa observada é
-  // suavizada para evitar que poucas ocorrências façam a confiança oscilar demasiado.
+  // A calibração adaptativa só entra com evidência real suficiente.
+  // Preferimos mercado + faixa; depois mercado; por fim não ajustamos.
   if (hb.n >= 5) {
-    const empirical = 50 + (hb.rate - 50) * Math.min(1, hb.n / 20);
+    const weight = Math.min(1, hb.n / 20);
+    const empirical = 50 + (hb.rate - 50) * weight;
     confidence = Math.round(clamp(.65 * confidence + .35 * empirical));
     source = `score ${hb.faixa}`;
     sample = hb.n;
     rate = hb.rate;
     gap = hb.gap;
   } else if (h.n >= 5) {
-    const empirical = 50 + (h.rate - 50) * Math.min(1, h.n / 20);
+    const weight = Math.min(1, h.n / 20);
+    const empirical = 50 + (h.rate - 50) * weight;
     confidence = Math.round(clamp(.78 * confidence + .22 * empirical));
     source = "mercado";
     sample = h.n;
@@ -310,21 +312,32 @@ function calibrarConfianca(raw, market, score) {
     gap = h.gap;
   }
 
-  // A confiança nunca pode ficar muito acima do Score.
   confidence = Math.min(confidence, Math.min(95, Math.round(score + 12)));
   return { confidence, sample, rate, source, bucket: hb.faixa, gap };
 }
 
+function calibrarScore(rawScore, calibration) {
+  const score = clamp(rawScore);
+  if (!calibration || calibration.sample < 5 || calibration.gap == null) return Math.round(score);
+
+  // Ajuste progressivo: quanto maior a amostra, maior a influência do erro real.
+  // Limitamos a correcção para evitar que poucos resultados dominem o ranking.
+  const sampleWeight = Math.min(1, calibration.sample / 20);
+  const adjustment = calibration.gap * 0.35 * sampleWeight;
+  return Math.round(clamp(score + adjustment, 0, 100));
+}
+
 function calibrarJogos(games) {
   return (games || []).map(j => {
-    const c = calibrarConfianca(j.suggestion.confidence, j.suggestion.market, j.score);
-    const calibratedScore = j.suggestion.market === "none" ? 0 : Math.round(clamp(.90 * j.score + .10 * c.confidence));
+    const rawScore = j.rawScore ?? j.score;
+    const c = calibrarConfianca(j.suggestion.confidence, j.suggestion.market, rawScore);
+    const calibratedScore = j.suggestion.market === "none" ? 0 : calibrarScore(rawScore, c);
     return {
       ...j,
-      rawScore:j.score,
+      rawScore,
       rawConfidence:j.suggestion.confidence,
       score:calibratedScore,
-      suggestion:{...j.suggestion, confidence:c.confidence, calibrationSample:c.sample, calibrationRate:c.rate, calibrationSource:c.source, calibrationBucket:c.bucket}
+      suggestion:{...j.suggestion, confidence:c.confidence, calibrationSample:c.sample, calibrationRate:c.rate, calibrationSource:c.source, calibrationBucket:c.bucket, calibrationGap:c.gap}
     };
   }).sort((a,b)=>b.score-a.score);
 }
@@ -421,7 +434,7 @@ function gerarDadosLaboratorio() {
     kickoff:new Date(hoje.getTime()-(i+1)*3600000).toISOString(),
     home:["Benfica","Barcelona","Sporting","Real Madrid","Porto","Braga","Arsenal","Inter","PSV","Ajax","Roma","Lyon"][i],
     away:["Estoril","Rayo Vallecano","Arouca","Getafe","Rio Ave","Boavista","Chelsea","Milan","Feyenoord","Utrecht","Lazio","Nice"][i],
-    league:"Laboratório V1.4.23", market:mercados[i], label:mercados[i], reason:"Resultado de teste para validar Histórico e calibração.",
+    league:"Laboratório V1.4.24", market:mercados[i], label:mercados[i], reason:"Resultado de teste para validar Histórico e calibração.",
     confidence:confidences[i], rawConfidence:confidences[i], score, rawScore:score, scoreBucket:faixaScore(score),
     resultado:results[i], savedAt:hoje.toISOString(), resolvedAt:hoje.toISOString(), laboratorio:true
   }));
@@ -445,7 +458,7 @@ function renderizarLaboratorio() {
   const gap=rate==null?null:rate-avg;
   const status=resolved.length>=5?"🟢 Amostra de teste suficiente":"🟡 Gere os dados de teste para começar";
   c.innerHTML=`<div class="lab-panel">
-    <div class="lab-head"><div><h3>🧪 Laboratório V1.4.23</h3><p>Ambiente isolado para testar Histórico, resultados e calibração <b>sem fazer pedidos à API-Football</b>. Os dados daqui não entram no histórico real.</p></div><span class="lab-badge">🚫 API: 0 pedidos</span></div>
+    <div class="lab-head"><div><h3>🧪 Laboratório V1.4.24</h3><p>Ambiente isolado para testar Histórico, resultados e calibração <b>sem fazer pedidos à API-Football</b>. Os dados daqui não entram no histórico real.</p></div><span class="lab-badge">🚫 API: 0 pedidos</span></div>
     <div class="lab-actions"><button class="btn-lab" onclick="gerarDadosLaboratorio()">🧪 Gerar 12 resultados de teste</button><button class="btn-lab-secondary" onclick="limparLaboratorio()">🗑 Limpar laboratório</button></div>
     <div class="history-summary"><div><strong>${laboratorioSugestoes.length}</strong><small>Dados de teste</small></div><div><strong>${resolved.length}</strong><small>Avaliados</small></div><div><strong>${rate==null?"—":rate+"%"}</strong><small>Acerto teste</small></div><div><strong>${gap==null?"—":(gap>0?"+":"")+gap+" pp"}</strong><small>Real − previsto</small></div></div>
     <div class="calibration-status"><b>${status}</b><span>${resolved.length?`Confiança média ${avg}% · ${gap==null?"—":`diferença ${gap>0?"+":""}${gap} pp`}`:"Nenhum resultado de teste criado."}</span></div>
@@ -476,7 +489,7 @@ function renderizarJogos() {
     const card = document.createElement("div");
     card.className = `game-card opportunity-card ${n.cls}`;
     const calibration = j.suggestion.calibrationSample >= 5
-      ? `<span>📐 Calibrado por ${escapeHtml(j.suggestion.calibrationSource || "histórico")} · ${j.suggestion.calibrationSample} resultados (${Math.round(j.suggestion.calibrationRate)}% acerto)</span>`
+      ? `<span>📐 Score adaptado pelo histórico: ${j.rawScore ?? j.score} → ${j.score} · ${escapeHtml(j.suggestion.calibrationSource || "histórico")} · ${j.suggestion.calibrationSample} resultados (${Math.round(j.suggestion.calibrationRate)}% acerto${j.suggestion.calibrationGap==null?"":`, ${j.suggestion.calibrationGap>0?"+":""}${Math.round(j.suggestion.calibrationGap)} pp`})</span>`
       : `<span>📐 Calibração inicial${j.suggestion.calibrationSample ? ` · ${j.suggestion.calibrationSample}/5 resultados` : ""}</span>`;
     card.innerHTML = `
       <div>
