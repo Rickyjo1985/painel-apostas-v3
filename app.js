@@ -8,6 +8,8 @@ function clamp(n, a=0, b=100) { return Math.max(a, Math.min(b, Number(n) || 0));
 const HIST_KEY = "painel_v14_historico";
 const QUOTA_GUARD_KEY = "painel_v1422_quota_guard";
 const QUOTA_LIMIT_DEFAULT = 100;
+const LAB_KEY = "painel_v1423_laboratorio";
+let laboratorioSugestoes = JSON.parse(localStorage.getItem(LAB_KEY) || "[]");
 let historicoSugestoes = JSON.parse(localStorage.getItem(HIST_KEY) || "[]");
 
 function utcDayKey(date = new Date()) {
@@ -378,12 +380,14 @@ function mostrarSubAbaJogos(tab) {
   const panels = {
     oportunidades: "games-opportunities",
     historico: "games-history",
-    estatisticas: "games-calibration"
+    estatisticas: "games-calibration",
+    laboratorio: "games-lab"
   };
   const buttons = {
     oportunidades: "history-tab-opportunities",
     historico: "history-tab-historico",
-    estatisticas: "history-tab-estatisticas"
+    estatisticas: "history-tab-estatisticas",
+    laboratorio: "history-tab-laboratorio"
   };
 
   Object.entries(panels).forEach(([key, id]) => {
@@ -398,6 +402,56 @@ function mostrarSubAbaJogos(tab) {
   if (tab === "oportunidades") renderizarJogos();
   if (tab === "historico") renderizarHistorico();
   if (tab === "estatisticas") renderizarCalibracao();
+  if (tab === "laboratorio") renderizarLaboratorio();
+}
+
+function gerarDadosLaboratorio() {
+  const hoje = new Date();
+  const mercados = [
+    "Dupla possibilidade: casa ou empate", "Dupla possibilidade: fora ou empate",
+    "Mais de 1,5 golos", "Vitória da equipa da casa", "Dupla possibilidade: casa ou empate",
+    "Mais de 1,5 golos", "Dupla possibilidade: fora ou empate", "Vitória da equipa da casa",
+    "Dupla possibilidade: casa ou empate", "Mais de 1,5 golos", "Dupla possibilidade: fora ou empate", "Vitória da equipa da casa"
+  ];
+  const scores = [82,79,76,73,71,68,66,63,61,58,55,52];
+  const confidences = [84,80,78,75,73,70,68,65,63,60,58,55];
+  const results = ["ganha","ganha","ganha","perdida","ganha","ganha","perdida","ganha","perdida","ganha","perdida","ganha"];
+  laboratorioSugestoes = scores.map((score,i)=>({
+    id:`lab-${hoje.getTime()}-${i}`, date:hoje.toISOString().slice(0,10),
+    kickoff:new Date(hoje.getTime()-(i+1)*3600000).toISOString(),
+    home:["Benfica","Barcelona","Sporting","Real Madrid","Porto","Braga","Arsenal","Inter","PSV","Ajax","Roma","Lyon"][i],
+    away:["Estoril","Rayo Vallecano","Arouca","Getafe","Rio Ave","Boavista","Chelsea","Milan","Feyenoord","Utrecht","Lazio","Nice"][i],
+    league:"Laboratório V1.4.23", market:mercados[i], label:mercados[i], reason:"Resultado de teste para validar Histórico e calibração.",
+    confidence:confidences[i], rawConfidence:confidences[i], score, rawScore:score, scoreBucket:faixaScore(score),
+    resultado:results[i], savedAt:hoje.toISOString(), resolvedAt:hoje.toISOString(), laboratorio:true
+  }));
+  localStorage.setItem(LAB_KEY, JSON.stringify(laboratorioSugestoes));
+  renderizarLaboratorio();
+}
+function limparLaboratorio() {
+  if(!confirm("Apagar todos os dados de teste do Laboratório V1.4.23?")) return;
+  laboratorioSugestoes=[]; localStorage.removeItem(LAB_KEY); renderizarLaboratorio();
+}
+function atualizarResultadoLaboratorio(id, resultado) {
+  laboratorioSugestoes=laboratorioSugestoes.map(x=>String(x.id)===String(id)?{...x,resultado,resolvedAt:resultado==="pendente"?null:new Date().toISOString()}:x);
+  localStorage.setItem(LAB_KEY,JSON.stringify(laboratorioSugestoes)); renderizarLaboratorio();
+}
+function renderizarLaboratorio() {
+  const c=document.getElementById("games-lab"); if(!c) return;
+  const resolved=laboratorioSugestoes.filter(x=>x.resultado!=="pendente");
+  const wins=resolved.filter(x=>x.resultado==="ganha").length;
+  const avg=resolved.length?Math.round(resolved.reduce((s,x)=>s+x.confidence,0)/resolved.length):null;
+  const rate=resolved.length?Math.round(wins/resolved.length*100):null;
+  const gap=rate==null?null:rate-avg;
+  const status=resolved.length>=5?"🟢 Amostra de teste suficiente":"🟡 Gere os dados de teste para começar";
+  c.innerHTML=`<div class="lab-panel">
+    <div class="lab-head"><div><h3>🧪 Laboratório V1.4.23</h3><p>Ambiente isolado para testar Histórico, resultados e calibração <b>sem fazer pedidos à API-Football</b>. Os dados daqui não entram no histórico real.</p></div><span class="lab-badge">🚫 API: 0 pedidos</span></div>
+    <div class="lab-actions"><button class="btn-lab" onclick="gerarDadosLaboratorio()">🧪 Gerar 12 resultados de teste</button><button class="btn-lab-secondary" onclick="limparLaboratorio()">🗑 Limpar laboratório</button></div>
+    <div class="history-summary"><div><strong>${laboratorioSugestoes.length}</strong><small>Dados de teste</small></div><div><strong>${resolved.length}</strong><small>Avaliados</small></div><div><strong>${rate==null?"—":rate+"%"}</strong><small>Acerto teste</small></div><div><strong>${gap==null?"—":(gap>0?"+":"")+gap+" pp"}</strong><small>Real − previsto</small></div></div>
+    <div class="calibration-status"><b>${status}</b><span>${resolved.length?`Confiança média ${avg}% · ${gap==null?"—":`diferença ${gap>0?"+":""}${gap} pp`}`:"Nenhum resultado de teste criado."}</span></div>
+    ${laboratorioSugestoes.length?`<div class="lab-list">${laboratorioSugestoes.map(x=>`<div class="lab-row"><div><b>${escapeHtml(x.home)} vs ${escapeHtml(x.away)}</b><small>${escapeHtml(x.label)} · Score ${x.score} · Confiança ${x.confidence}% · ${escapeHtml(x.scoreBucket)}</small></div><div class="history-actions"><button class="result-btn ${x.resultado==="ganha"?"selected":""}" onclick="atualizarResultadoLaboratorio('${jsQuote(x.id)}','ganha')">✓ Ganha</button><button class="result-btn ${x.resultado==="perdida"?"selected":""}" onclick="atualizarResultadoLaboratorio('${jsQuote(x.id)}','perdida')">✕ Perdida</button><button class="result-btn ${x.resultado==="pendente"?"selected":""}" onclick="atualizarResultadoLaboratorio('${jsQuote(x.id)}','pendente')">⏳ Pendente</button></div></div>`).join("")}</div>`:`<div class="history-empty">Clica em <b>Gerar 12 resultados de teste</b>. Nada será enviado para a API.</div>`}
+    <div class="calibration-help"><b>Teste recomendado:</b> gera os dados, altera 2 ou 3 resultados, confirma os valores e recarrega a página. O laboratório deve manter os dados e continuar sem consumir quota.</div>
+  </div>`;
 }
 
 function renderizarJogos() {
