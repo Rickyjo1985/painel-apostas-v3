@@ -130,7 +130,7 @@ A V1.3 usa API-Football como fonte de dados e ordena os jogos por um score próp
 
 - O frontend recalcula o número de sinais a partir de `dataPoints` quando uma resposta antiga/incompleta não traz `evidenceCount`, evitando indicadores `0/6` incoerentes com a própria Prediction.
 
-## V1.4.11 — diagnóstico da API
+## V1.4.12 — diagnóstico da API
 - Mantém o algoritmo/Score da V1.4.9 sem alterar os pesos.
 - Cada candidato passa a expor o estado dos endpoints: `/leagues`, `/standings`, histórico casa/fora, fallback de histórico, H2H, `/predictions` e `/teams/statistics`.
 - Distingue `OK`, `vazio` (HTTP 200 com `response` vazia), `não coberto`, `erro` e `não testado`.
@@ -139,9 +139,18 @@ A V1.3 usa API-Football como fonte de dados e ordena os jogos por um score próp
 - O frontend mostra um painel de diagnóstico abaixo do estado da análise, incluindo quota restante e os motivos concretos quando um endpoint não devolve dados.
 - A versão continua a exigir pelo menos 3 sinais reais para transformar um jogo numa oportunidade recomendável.
 
-## V1.4.11 — Rate-limit safe architecture
+## V1.4.12 — Rate-limit safe architecture
 - Limits each analysis execution to one fixtures call plus at most five sequential prediction calls.
 - No parallel fan-out of standings, H2H, form and team-statistics endpoints.
 - Uses the Predictions endpoint as the primary evidence source; API-Football documents that it includes probabilities, goals, advice and a comparison block with form/attack/defence/H2H context.
 - Adds a short inter-request delay and caches prediction responses.
 - Keeps odds completely outside the scoring model.
+
+
+## V1.4.12
+- Motor de decisão baseado em sinais concordantes.
+- Não força mercados quando Prediction e comparação não mostram vantagem clara.
+- Score e confiança deixam de ficar artificialmente desalinhados.
+- Mercados de golos só entram quando existe evidência suficiente.
+- Jogos sem recomendação forte não entram no TOP.
+- Namespace de cache actualizado para evitar mistura com V1.4.11.
