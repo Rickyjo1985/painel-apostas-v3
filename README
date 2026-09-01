@@ -117,3 +117,15 @@ A V1.3 usa API-Football como fonte de dados e ordena os jogos por um score próp
 - A resposta inclui diagnóstico de quota restante, cobertura da competição, season usada e erros dos endpoints opcionais.
 - Foram removidas chamadas de `/teams/statistics` nesta fase para reduzir consumo de quota; forma recente + standings + H2H + predictions são a base do modelo.
 - A documentação oficial da API-Football recomenda verificar `coverage` antes de chamar endpoints dependentes de uma determinada competição/época e cachear esta informação.
+
+
+## V1.4.9 — season/cobertura e histórico robustos
+- `/leagues` passa a ser consultado por ID sem fixar a season no pedido; a season é escolhida a partir das temporadas realmente disponíveis para a competição e da data do jogo.
+- Histórico recente tenta primeiro a combinação `team + league + season` e usa fallback global apenas quando a API devolve zero resultados.
+- Predictions são consultadas quando a cobertura é desconhecida, mas não quando a cobertura explicitamente diz que não existe.
+- A leitura de coverage aceita as variantes de estatísticas de fixtures da resposta da API.
+- Jogos com menos de 3 sinais reais deixam de aparecer como recomendações.
+- O diagnóstico regista erros e quota restante dos endpoints opcionais.
+
+
+- O frontend recalcula o número de sinais a partir de `dataPoints` quando uma resposta antiga/incompleta não traz `evidenceCount`, evitando indicadores `0/6` incoerentes com a própria Prediction.
