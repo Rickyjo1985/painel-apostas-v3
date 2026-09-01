@@ -173,23 +173,23 @@ function historicoMercado(market) {
   return { n: rows.length, wins, rate: rows.length ? wins / rows.length * 100 : null };
 }
 
-function calibrarConfianca(raw, market) {
+function calibrarConfianca(raw, market, score) {
   const h = historicoMercado(market);
-  // Sem amostra suficiente, não alteramos a previsão.
-  if (h.n < 5) return { confidence: Math.round(raw), sample:h.n, rate:h.rate };
-  // Shrinkage: a amostra histórica influencia, mas nunca domina o modelo.
-  const empirical = 50 + (h.rate - 50) * Math.min(1, h.n / 20);
-  return {
-    confidence: Math.round(clamp(.75 * raw + .25 * empirical)),
-    sample:h.n,
-    rate:h.rate
-  };
+  let confidence = Math.round(clamp(raw));
+  if (h.n >= 5) {
+    const empirical = 50 + (h.rate - 50) * Math.min(1, h.n / 20);
+    confidence = Math.round(clamp(.78 * confidence + .22 * empirical));
+  }
+  // A confiança não pode ficar muito acima do Score. São métricas diferentes,
+  // mas uma oportunidade média não deve parecer quase certa.
+  confidence = Math.min(confidence, Math.min(95, Math.round(score + 12)));
+  return { confidence, sample:h.n, rate:h.rate };
 }
 
 function calibrarJogos(games) {
   return (games || []).map(j => {
-    const c = calibrarConfianca(j.suggestion.confidence, j.suggestion.market);
-    const calibratedScore = Math.round(clamp(.78 * j.score + .22 * c.confidence));
+    const c = calibrarConfianca(j.suggestion.confidence, j.suggestion.market, j.score);
+    const calibratedScore = j.suggestion.market === "none" ? 0 : Math.round(clamp(.90 * j.score + .10 * c.confidence));
     return {
       ...j,
       rawScore:j.score,
@@ -252,8 +252,8 @@ function renderizarJogos() {
   if (!baseJogos.length) return;
   baseJogos.forEach((j, index) => {
     const n = nivelScore(j.score);
-    const confidence = Math.round(Math.min(96, Math.max(0, j.suggestion.confidence)));
-    const confidenceLabel = j.dataQuality === "insufficient" ? "Evidência disponível" : "Confiança estimada";
+    const confidence = Math.round(Math.min(95, Math.max(0, j.suggestion.confidence)));
+    const confidenceLabel = j.suggestion.market === "none" ? "Força da evidência" : "Confiança estimada";
     const alternatives = (j.suggestions || []).filter(s => s.market !== j.suggestion.market).slice(0,2);
     const saved = historicoSugestoes.some(x => String(x.id) === String(j.id));
     const derivedEvidence = [
@@ -278,7 +278,7 @@ function renderizarJogos() {
         <div class="confidence-line"><span>${confidenceLabel}</span><strong>${confidence}%</strong></div>
         <div class="confidence-bar"><span style="width:${Math.min(confidence,100)}%"></span></div>
         <div class="suggestion-box">
-          <small>🎯 Sugestão principal</small>
+          <small>${j.suggestion.market === "none" ? "🧭 Decisão do modelo" : "🎯 Sugestão principal"}</small>
           <div class="main-suggestion">${escapeHtml(j.suggestion.label)}</div>
           <div class="reason">${escapeHtml(j.suggestion.reason)}</div>
         </div>
@@ -298,9 +298,9 @@ function renderizarJogos() {
         ${alternatives.length ? `<div class="alternatives"><small>Outras leituras</small>${alternatives.map(s => `<div>• ${escapeHtml(s.label)} <b>${Math.round(s.confidence)}%</b></div>`).join("")}</div>` : ""}
       </div>
       <div class="card-footer">
-        <span class="data-note">${j.dataQuality === "high" ? "✓ Dados fortes" : j.dataQuality === "medium" ? "✓ Dados razoáveis" : j.dataQuality === "low" ? "⚠ Dados limitados" : "⛔ Dados insuficientes"} · ${signalCount}/6 sinais</span>
+        <span class="data-note">${j.suggestion.market === "none" ? "⛔ Sem vantagem clara" : (j.dataQuality === "high" ? "✓ Dados fortes" : j.dataQuality === "medium" ? "✓ Dados razoáveis" : j.dataQuality === "low" ? "⚠ Dados limitados" : "⛔ Dados insuficientes")} · ${signalCount}/6 sinais</span>
         <div class="card-actions">
-          <button class="btn-import" onclick="importarParaFormulario('${jsQuote(`${j.home} vs ${j.away} (${j.suggestion.label})`)}', 1)">⚡ Registar</button>
+          <button class="btn-import" onclick="importarParaFormulario('${jsQuote(`${j.home} vs ${j.away} (${j.suggestion.label})`)}', 1)" ${j.suggestion.market === "none" ? "disabled" : ""}>⚡ Registar</button>
           <button class="btn-history" onclick="guardarSugestao('${jsQuote(j.id)}')" ${saved ? "disabled" : ""}>${saved ? "✓ Guardada" : "📚 Guardar"}</button>
         </div>
       </div>`;
