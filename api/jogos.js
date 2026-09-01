@@ -2,6 +2,7 @@ const CACHE_TTL_MS = 30 * 60 * 1000;
 const COVERAGE_TTL_MS = 24 * 60 * 60 * 1000;
 const TOP_LIMIT = 5;
 const MAX_CANDIDATES = 12;
+const TEAM_STATS_DIAGNOSTIC_LIMIT = 3;
 const cache = globalThis.__footballCache || (globalThis.__footballCache = new Map());
 
 const PRIORITY_LEAGUES = new Map([
@@ -78,6 +79,24 @@ async function apiFetch(path,params={}){
     throw err;
   }
   return {response:Array.isArray(data.response)?data.response:[],remaining,limit,results:num(data.results)||0};
+}
+
+function callDiagnostic(endpoint, params, call, options={}){
+  const requested = options.requested !== false;
+  const covered = options.covered !== false;
+  if(!requested){
+    return {status:"não testado",ok:false,results:0,reason:options.reason||"não solicitado nesta versão",params};
+  }
+  if(!covered){
+    return {status:"não coberto",ok:false,results:0,reason:options.reason||"endpoint não indicado na cobertura da competição",params};
+  }
+  if(call?.ok && Number(call.results||0)>0){
+    return {status:"OK",ok:true,results:Number(call.results||call.response?.length||0),reason:`${Number(call.results||call.response?.length||0)} resultado(s)`,remaining:call.remaining??null,params};
+  }
+  if(call?.ok){
+    return {status:"vazio",ok:false,results:0,reason:"HTTP 200, mas response está vazia",remaining:call.remaining??null,params};
+  }
+  return {status:"erro",ok:false,results:0,reason:call?.error||"erro desconhecido",remaining:call?.remaining??null,params};
 }
 
 async function optionalApi(path,params,force=false,ttl=CACHE_TTL_MS){
@@ -275,6 +294,7 @@ export default async function handler(req,res){
       const standingCache=new Map();
       const out=[];
       const failures=[];
+      let teamStatsDiagnosticsUsed=0;
       const diagnostics={
         quotaRemaining:fixtureCall.remaining,
         quotaLimit:fixtureCall.limit,
@@ -305,17 +325,37 @@ export default async function handler(req,res){
           }
 
           // Recent fixtures and H2H remain useful even when a competition has no standings/predictions.
+          const historyHomeParams={team:hid,league:leagueId,season,last:10};
+          const historyAwayParams={team:aid,league:leagueId,season,last:10};
+          const h2hParams={h2h:`${hid}-${aid}`,last:10};
+          const predictionParams={fixture:f.fixture.id};
           const [hf0,af0,hh,pr]=await Promise.all([
-            cached(`v149:h:${hid}:${leagueId}:${season}`,()=>optionalApi("/fixtures",{team:hid,league:leagueId,season,last:10},force),force),
-            cached(`v149:a:${aid}:${leagueId}:${season}`,()=>optionalApi("/fixtures",{team:aid,league:leagueId,season,last:10},force),force),
-            cached(`v149:h2h:${hid}-${aid}`,()=>optionalApi("/fixtures/headtohead",{h2h:`${hid}-${aid}`,last:10},force),force),
-            coverage.predictions !== false ? cached(`v149:p:${f.fixture.id}`,()=>optionalApi("/predictions",{fixture:f.fixture.id},force),force) : Promise.resolve({ok:false,response:[],error:"prediction não coberta para esta competição/época"})
+            cached(`v149:h:${hid}:${leagueId}:${season}`,()=>optionalApi("/fixtures",historyHomeParams,force),force),
+            cached(`v149:a:${aid}:${leagueId}:${season}`,()=>optionalApi("/fixtures",historyAwayParams,force),force),
+            cached(`v149:h2h:${hid}-${aid}`,()=>optionalApi("/fixtures/headtohead",h2hParams,force),force),
+            coverage.predictions !== false ? cached(`v149:p:${f.fixture.id}`,()=>optionalApi("/predictions",predictionParams,force),force) : Promise.resolve({ok:false,response:[],error:"prediction não coberta para esta competição/época"})
           ]);
           // Some competitions expose team history globally but not when scoped to the current season.
-          const hf = hf0.response.length ? hf0 : await cached(`v149:h-fallback:${hid}`,()=>optionalApi("/fixtures",{team:hid,last:10},force),force);
-          const af = af0.response.length ? af0 : await cached(`v149:a-fallback:${aid}`,()=>optionalApi("/fixtures",{team:aid,last:10},force),force);
+          const hfFallbackParams={team:hid,last:10};
+          const afFallbackParams={team:aid,last:10};
+          const hf = hf0.response.length ? hf0 : await cached(`v149:h-fallback:${hid}`,()=>optionalApi("/fixtures",hfFallbackParams,force),force);
+          const af = af0.response.length ? af0 : await cached(`v149:a-fallback:${aid}`,()=>optionalApi("/fixtures",afFallbackParams,force),force);
 
           const h=historyFeatures(hf.response,hid),a=historyFeatures(af.response,aid),h2=h2hFeatures(hh.response),p=predictionData(pr.response?.[0]);
+
+          // Team statistics are used only as a diagnostic probe on the first few candidates,
+          // so we can identify parameter/coverage issues without burning the daily quota.
+          let teamStatsHome={ok:false,response:[],error:"não testado nesta versão",results:0};
+          let teamStatsAway={ok:false,response:[],error:"não testado nesta versão",results:0};
+          let teamStatsTested=false;
+          if(teamStatsDiagnosticsUsed < TEAM_STATS_DIAGNOSTIC_LIMIT){
+            teamStatsDiagnosticsUsed++;
+            teamStatsTested=true;
+            [teamStatsHome,teamStatsAway]=await Promise.all([
+              optionalApi("/teams/statistics",{league:leagueId,season,team:hid},force),
+              optionalApi("/teams/statistics",{league:leagueId,season,team:aid},force)
+            ]);
+          }
           const sh=sm.get(hid)||null,sa=sm.get(aid)||null;
           if(h.winRate==null) h.winRate=formStringRate(sh?.form) ?? (sh?.homePlayed&&sh?.homeWins!=null?sh.homeWins/sh.homePlayed*100:null);
           if(a.winRate==null) a.winRate=formStringRate(sa?.form) ?? (sa?.awayPlayed&&sa?.awayWins!=null?sa.awayWins/sa.awayPlayed*100:null);
@@ -326,6 +366,16 @@ export default async function handler(req,res){
           const best={...markets[0],reason:marketReason(markets[0].label,h,a,h2,p,sh,sa)};
           const suggestions=markets.slice(0,4).map(m=>({...m,reason:marketReason(m.label,h,a,h2,p,sh,sa)}));
           const dataQuality=quality(evidenceCount);
+          const scopedHomeDiag=callDiagnostic("fixtures-home",historyHomeParams,hf0);
+          const scopedAwayDiag=callDiagnostic("fixtures-away",historyAwayParams,af0);
+          const fallbackHomeDiag=hf0.response.length?null:callDiagnostic("fixtures-home-fallback",hfFallbackParams,hf);
+          const fallbackAwayDiag=af0.response.length?null:callDiagnostic("fixtures-away-fallback",afFallbackParams,af);
+          const teamStatsHomeDiag=teamStatsTested
+            ? callDiagnostic("team-stats-home",{league:leagueId,season,team:hid},teamStatsHome)
+            : callDiagnostic("team-stats-home",{league:leagueId,season,team:hid},teamStatsHome,{requested:false,reason:"diagnóstico limitado aos primeiros 3 jogos"});
+          const teamStatsAwayDiag=teamStatsTested
+            ? callDiagnostic("team-stats-away",{league:leagueId,season,team:aid},teamStatsAway)
+            : callDiagnostic("team-stats-away",{league:leagueId,season,team:aid},teamStatsAway,{requested:false,reason:"diagnóstico limitado aos primeiros 3 jogos"});
 
           out.push({
             id:f.fixture.id,home:f.teams.home.name,away:f.teams.away.name,league:league.name,
@@ -333,6 +383,22 @@ export default async function handler(req,res){
             kickoff:f.fixture.date,score,suggestion:best,suggestions,dataQuality,evidenceCount,
             coverage:{season,standings:!!coverage.standings,predictions:!!coverage.predictions,fixtureStatistics:!!coverage.fixtureStatistics,label:coverageLabel(coverage)},
             dataPoints:{historyHome:h.n,historyAway:a.n,h2h:h2.n,prediction:p.available,standingsHome:sh?.rank!=null,standingsAway:sa?.rank!=null},
+            endpointDiagnostics:{
+              leagues:meta?.ok?{status:"OK",ok:true,results:1,reason:`season seleccionada ${season}`,params:{id:leagueId}}:{status:"erro",ok:false,results:0,reason:meta?.error||"sem metadata da competição",params:{id:leagueId}},
+              standings:coverage.standings
+                ? (standingCache.get(standKey)?.call ? callDiagnostic("standings",{league:leagueId,season},standingCache.get(standKey).call) : {status:"não testado",ok:false,results:0,reason:"não executado",params:{league:leagueId,season}})
+                : callDiagnostic("standings",{league:leagueId,season},null,{requested:false,covered:false,reason:"não coberto pela competição/época"}),
+              fixturesHome:scopedHomeDiag,
+              fixturesHomeFallback:fallbackHomeDiag,
+              fixturesAway:scopedAwayDiag,
+              fixturesAwayFallback:fallbackAwayDiag,
+              h2h:callDiagnostic("h2h",h2hParams,hh),
+              predictions:coverage.predictions
+                ? callDiagnostic("predictions",predictionParams,pr)
+                : callDiagnostic("predictions",predictionParams,pr,{requested:false,covered:false,reason:"não coberto pela competição/época"}),
+              teamStatsHome:teamStatsHomeDiag,
+              teamStatsAway:teamStatsAwayDiag
+            },
             metrics:{
               form:`${h.winRate!=null?Math.round(h.winRate):"—"}% / ${a.winRate!=null?Math.round(a.winRate):"—"}% · ${h.n}/${a.n}`,
               goals:`${h.o15Rate!=null?Math.round(h.o15Rate):"—"}% / ${a.o15Rate!=null?Math.round(a.o15Rate):"—"}% +1.5 · ${h.avgGF!=null?h.avgGF.toFixed(2):"—"}/${a.avgGF!=null?a.avgGF.toFixed(2):"—"} GF`,
@@ -344,6 +410,14 @@ export default async function handler(req,res){
           });
 
           cdiag.evidenceCount=evidenceCount;cdiag.dataQuality=dataQuality;cdiag.sources={historyHome:h.n,historyAway:a.n,h2h:h2.n,prediction:p.available,standingsHome:!!sh,standingsAway:!!sa};
+          cdiag.endpointDiagnostics={
+            leagues:meta?.ok?{status:"OK",results:1,reason:`season ${season}`}:{status:"erro",results:0,reason:meta?.error||"sem metadata"},
+            standings:coverage.standings?(standingCache.get(standKey)?.call?callDiagnostic("standings",{league:leagueId,season},standingCache.get(standKey).call):null):{status:"não coberto",results:0,reason:"não coberto pela competição/época"},
+            fixturesHome:scopedHomeDiag,fixturesHomeFallback:fallbackHomeDiag,fixturesAway:scopedAwayDiag,fixturesAwayFallback:fallbackAwayDiag,
+            h2h:callDiagnostic("h2h",h2hParams,hh),
+            predictions:coverage.predictions?callDiagnostic("predictions",predictionParams,pr):{status:"não coberto",results:0,reason:"não coberto pela competição/época"},
+            teamStatsHome:teamStatsHomeDiag,teamStatsAway:teamStatsAwayDiag
+          };
           diagnostics.competitions.push(cdiag);
           for(const [endpoint,call] of [["fixtures-home",hf],["fixtures-away",af],["h2h",hh],["predictions",pr]]){
             if(call?.error) diagnostics.optionalErrors.push({fixture:f.fixture.id,endpoint,error:call.error,remaining:call.remaining??null});
@@ -364,7 +438,7 @@ export default async function handler(req,res){
     },force);
 
     res.status(200).json({
-      ok:true,version:"1.4.9",date,dateLabel:labelDate(date),fixturesFound:result.fixturesFound,
+      ok:true,version:"1.4.10",date,dateLabel:labelDate(date),fixturesFound:result.fixturesFound,
       candidates:result.candidates,analyzed:result.analyzedCount,recommendable:result.recommendable,selected:result.games.length,games:result.games,
       diagnostics:result.diagnostics,cached:!force
     });
