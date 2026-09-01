@@ -174,17 +174,53 @@ function historicoMercado(market) {
   return { n: rows.length, wins, rate: rows.length ? wins / rows.length * 100 : null };
 }
 
+function faixaScore(score) {
+  const s = Number(score) || 0;
+  if (s >= 80) return "80+";
+  if (s >= 70) return "70-79";
+  if (s >= 60) return "60-69";
+  if (s >= 50) return "50-59";
+  return "<50";
+}
+
+function historicoFaixa(market, score) {
+  const faixa = faixaScore(score);
+  const rows = historicoSugestoes.filter(x =>
+    x.market === market &&
+    (x.scoreBucket || faixaScore(x.score)) === faixa &&
+    x.resultado !== "pendente"
+  );
+  const wins = rows.filter(x => x.resultado === "ganha").length;
+  return { n: rows.length, wins, rate: rows.length ? wins / rows.length * 100 : null, faixa };
+}
+
 function calibrarConfianca(raw, market, score) {
   const h = historicoMercado(market);
+  const hb = historicoFaixa(market, score);
   let confidence = Math.round(clamp(raw));
-  if (h.n >= 5) {
+  let source = "inicial";
+  let sample = h.n;
+  let rate = h.rate;
+
+  // Primeiro usamos o histórico específico da combinação mercado + faixa de Score
+  // quando existe uma amostra mínima. Isto evita que um Score 55 seja calibrado
+  // como um Score 80 só porque pertencem ao mesmo mercado.
+  if (hb.n >= 5) {
+    const empirical = 50 + (hb.rate - 50) * Math.min(1, hb.n / 20);
+    confidence = Math.round(clamp(.70 * confidence + .30 * empirical));
+    source = `score ${hb.faixa}`;
+    sample = hb.n;
+    rate = hb.rate;
+  } else if (h.n >= 5) {
     const empirical = 50 + (h.rate - 50) * Math.min(1, h.n / 20);
-    confidence = Math.round(clamp(.78 * confidence + .22 * empirical));
+    confidence = Math.round(clamp(.82 * confidence + .18 * empirical));
+    source = "mercado";
   }
+
   // A confiança não pode ficar muito acima do Score. São métricas diferentes,
   // mas uma oportunidade média não deve parecer quase certa.
   confidence = Math.min(confidence, Math.min(95, Math.round(score + 12)));
-  return { confidence, sample:h.n, rate:h.rate };
+  return { confidence, sample, rate, source, bucket:hb.faixa };
 }
 
 function calibrarJogos(games) {
@@ -196,7 +232,7 @@ function calibrarJogos(games) {
       rawScore:j.score,
       rawConfidence:j.suggestion.confidence,
       score:calibratedScore,
-      suggestion:{...j.suggestion, confidence:c.confidence, calibrationSample:c.sample, calibrationRate:c.rate}
+      suggestion:{...j.suggestion, confidence:c.confidence, calibrationSample:c.sample, calibrationRate:c.rate, calibrationSource:c.source, calibrationBucket:c.bucket}
     };
   }).sort((a,b)=>b.score-a.score);
 }
@@ -212,7 +248,7 @@ function guardarSugestao(id) {
     id:j.id, date:j.kickoff?.slice(0,10) || new Date().toISOString().slice(0,10),
     kickoff:j.kickoff, home:j.home, away:j.away, league:j.league,
     market:j.suggestion.market, label:j.suggestion.label,
-    confidence:j.suggestion.confidence, score:j.score,
+    confidence:j.suggestion.confidence, score:j.score, scoreBucket:faixaScore(j.score),
     resultado:"pendente", savedAt:new Date().toISOString()
   });
   localStorage.setItem(HIST_KEY, JSON.stringify(historicoSugestoes));
@@ -269,7 +305,7 @@ function renderizarJogos() {
     const card = document.createElement("div");
     card.className = `game-card opportunity-card ${n.cls}`;
     const calibration = j.suggestion.calibrationSample >= 5
-      ? `<span>📐 Calibrado com ${j.suggestion.calibrationSample} resultados (${Math.round(j.suggestion.calibrationRate)}% acerto)</span>`
+      ? `<span>📐 Calibrado por ${escapeHtml(j.suggestion.calibrationSource || "histórico")} · ${j.suggestion.calibrationSample} resultados (${Math.round(j.suggestion.calibrationRate)}% acerto)</span>`
       : `<span>📐 Calibração inicial${j.suggestion.calibrationSample ? ` · ${j.suggestion.calibrationSample}/5 resultados` : ""}</span>`;
     card.innerHTML = `
       <div>
@@ -355,7 +391,7 @@ function renderizarCalibracao() {
   c.innerHTML=`
     <div class="calibration-panel">
       <h3>📊 Calibração do modelo</h3>
-      <p>O ajuste só começa a influenciar o Score depois de <b>5 resultados avaliados</b> no mesmo mercado. Antes disso, o modelo mantém o valor original.</p>
+      <p>A calibração começa com <b>5 resultados avaliados</b>. Quando houver amostra suficiente, o sistema prefere o histórico do <b>mesmo mercado + faixa de Score</b>; caso contrário usa o histórico do mercado. Antes disso, mantém o valor original.</p>
       <div class="history-summary">
         <div><strong>${overall==null?"—":overall+"%"}</strong><small>Acerto global</small></div>
         <div><strong>${resolved.length}</strong><small>Resultados</small></div>
@@ -363,7 +399,10 @@ function renderizarCalibracao() {
       </div>
       ${rows.length ? `<div class="calibration-table"><div class="ct-head"><span>Mercado</span><span>Amostra</span><span>Acerto</span><span>Estado</span></div>${rows.map(([market,items])=>{
         const wins=items.filter(x=>x.resultado==="ganha").length, rate=Math.round(wins/items.length*100);
-        return `<div class="ct-row"><span>${escapeHtml(items[0].label)}</span><span>${items.length}</span><span>${rate}%</span><span>${items.length>=5?"🟢 A calibrar":"⚪ A recolher dados"}</span></div>`;
+        const buckets={};
+        items.forEach(x=>{ const b=x.scoreBucket||faixaScore(x.score); if(!buckets[b]) buckets[b]=[]; buckets[b].push(x); });
+        const faixaInfo=Object.entries(buckets).sort((a,b)=>b[1].length-a[1].length).map(([b,v])=>`${b}: ${v.length}`).join(" · ");
+        return `<div class="ct-row"><span>${escapeHtml(items[0].label)}<small>${escapeHtml(faixaInfo)}</small></span><span>${items.length}</span><span>${rate}%</span><span>${items.length>=5?"🟢 A calibrar":"⚪ A recolher dados"}</span></div>`;
       }).join("")}</div>` : `<div class="history-empty">Ainda não há resultados avaliados.</div>`}
     </div>`;
 }
