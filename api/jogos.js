@@ -64,7 +64,7 @@ async function apiFetch(path,params={}){
   return {response:Array.isArray(data.response)?data.response:[],remaining,limit,results:num(data.results)||0};
 }
 async function optionalApi(path,params,force=false,ttl=CACHE_TTL_MS){
-  try{ const x=await cached(`v1413:${path}:${JSON.stringify(params)}`,()=>apiFetch(path,params),force,ttl); return {ok:true,...x,error:null}; }
+  try{ const x=await cached(`v1415:${path}:${JSON.stringify(params)}`,()=>apiFetch(path,params),force,ttl); return {ok:true,...x,error:null}; }
   catch(err){ return {ok:false,response:[],remaining:err.remaining||null,limit:err.limit||null,error:err.message,status:err.status||null}; }
 }
 function leagueInfo(f){
@@ -161,28 +161,47 @@ function goalSignal(p,h,a,h2){
 }
 function marketReason(label,h,a,h2,p){
   const bits=[]; const add=t=>{if(t)bits.push(t);};
-  const isHome=label.includes("casa");
-  const isAway=label.includes("fora");
-  const predSide=isHome && p.home!=null ? p.home : isAway && p.away!=null ? p.away : null;
-  const otherSide=isHome && p.away!=null ? p.away : isAway && p.home!=null ? p.home : null;
+  const isDoubleHome=label.includes("casa ou empate");
+  const isDoubleAway=label.includes("fora ou empate");
+  const isHomeWin=label.includes("Vitória da equipa da casa");
+  const isAwayWin=label.includes("Vitória da equipa visitante");
+  const isHome=isDoubleHome||isHomeWin;
+  const isAway=isDoubleAway||isAwayWin;
+
+  // Para dupla possibilidade, a Prediction deve ser avaliada pelo par
+  // (casa+empate ou fora+empate), e não apenas pela probabilidade de vitória.
+  // Isto evita chamar "alinhados" a um cenário como 50% fora + 50% empate
+  // quando a casa também tem 50%.
+  let predSide=null, otherSide=null;
+  if(isDoubleHome && p.home!=null && p.draw!=null && p.away!=null){
+    predSide=p.home+p.draw; otherSide=p.away;
+  } else if(isDoubleAway && p.away!=null && p.draw!=null && p.home!=null){
+    predSide=p.away+p.draw; otherSide=p.home;
+  } else if(isHomeWin && p.home!=null && p.away!=null && p.draw!=null){
+    predSide=p.home; otherSide=Math.max(p.away,p.draw);
+  } else if(isAwayWin && p.away!=null && p.home!=null && p.draw!=null){
+    predSide=p.away; otherSide=Math.max(p.home,p.draw);
+  }
   const predClear=predSide!=null && otherSide!=null ? predSide >= otherSide + 5 : false;
+
   const formSide=isHome && h.winRate!=null && a.winRate!=null ? h.winRate : isAway && h.winRate!=null && a.winRate!=null ? a.winRate : null;
   const formOther=isHome && h.winRate!=null && a.winRate!=null ? a.winRate : isAway && h.winRate!=null && a.winRate!=null ? h.winRate : null;
   const formClear=formSide!=null && formOther!=null ? formSide >= formOther + 4 : false;
+  const formContradicts=formSide!=null && formOther!=null ? formOther >= formSide + 4 : false;
 
   if((label.includes("1,5")||label.includes("2,5"))&&p.homeGoals!=null&&p.awayGoals!=null)add(`Golos previstos: ${(p.homeGoals+p.awayGoals).toFixed(1)}`);
   if(label.includes("casa ou empate")&&p.home!=null&&p.draw!=null)add(`Prediction: ${Math.round(p.home)}% casa + ${Math.round(p.draw)}% empate`);
   if(label.includes("fora ou empate")&&p.away!=null&&p.draw!=null)add(`Prediction: ${Math.round(p.away)}% fora + ${Math.round(p.draw)}% empate`);
-  if(label.includes("Vitória da equipa da casa")&&p.home!=null)add(`Prediction: ${Math.round(p.home)}% casa`);
-  if(label.includes("Vitória da equipa visitante")&&p.away!=null)add(`Prediction: ${Math.round(p.away)}% fora`);
+  if(isHomeWin&&p.home!=null)add(`Prediction: ${Math.round(p.home)}% casa`);
+  if(isAwayWin&&p.away!=null)add(`Prediction: ${Math.round(p.away)}% fora`);
   if(h2.n>=2)add(`H2H: ${h2.n} jogos`);
   if(formSide!=null&&formOther!=null&&(isHome||isAway))add(`Forma: ${Math.round(formSide)}% vs ${Math.round(formOther)}%`);
 
-  // Explicação honesta da concordância: só usamos esta expressão quando
-  // Prediction e pelo menos um sinal independente apontam para o mesmo lado.
   if((isHome||isAway) && predClear && formClear) add("Prediction + forma alinhadas");
+  else if((isHome||isAway) && predClear && formContradicts) add("Prediction favorece este lado; forma favorece o adversário");
   else if((isHome||isAway) && formClear && !predClear) add("Forma favorece este lado; Prediction sem vantagem clara");
   else if((isHome||isAway) && predClear && !formClear) add("Prediction favorece este lado; forma sem vantagem clara");
+  else if((isHome||isAway) && !predClear && !formClear) add("Prediction equilibrada; forma sem vantagem clara");
 
   return bits.slice(0,3).join("; ")||"Sem evidência suficiente para uma recomendação forte.";
 }
@@ -277,7 +296,7 @@ function diagnosticFromCall(label,params,call,requested=true){
 export default async function handler(req,res){
   try{
     const date=dateInLisbon(), force=String(req?.query?.force||"")==="1";
-    const result=await cached(`v1413:${date}`,async()=>{
+    const result=await cached(`v1415:${date}`,async()=>{
       const fixtureCall=await apiFetch("/fixtures",{date,timezone:"Europe/Lisbon"});
       const fixtures=fixtureCall.response;
       const upcoming=fixtures.filter(f=>["NS","TBD"].includes(f.fixture?.status?.short)&&!BLOCKED.test(f.league?.name||""));
@@ -321,6 +340,6 @@ export default async function handler(req,res){
       const recommendable=out.filter(g=>g.evidenceCount>=3 && g.suggestion.market!=="none" && g.score>=50), games=recommendable.slice(0,TOP_LIMIT);
       return {fixturesFound:fixtures.length,candidates:candidates.length,analyzedCount:out.length,failures:out.length-candidates.length+0,recommendable:recommendable.length,games,all:out,diagnostics};
     },force);
-    res.status(200).json({ok:true,version:"1.4.13",date,dateLabel:labelDate(date),fixturesFound:result.fixturesFound,candidates:result.candidates,analyzed:result.analyzedCount,recommendable:result.recommendable,selected:result.games.length,games:result.games,diagnostics:result.diagnostics,cached:!force});
+    res.status(200).json({ok:true,version:"1.4.15",date,dateLabel:labelDate(date),fixturesFound:result.fixturesFound,candidates:result.candidates,analyzed:result.analyzedCount,recommendable:result.recommendable,selected:result.games.length,games:result.games,diagnostics:result.diagnostics,cached:!force});
   }catch(e){ console.error(e); res.status(500).json({ok:false,error:e.message||"Erro ao analisar jogos."}); }
 }
