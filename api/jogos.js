@@ -161,13 +161,29 @@ function goalSignal(p,h,a,h2){
 }
 function marketReason(label,h,a,h2,p){
   const bits=[]; const add=t=>{if(t)bits.push(t);};
+  const isHome=label.includes("casa");
+  const isAway=label.includes("fora");
+  const predSide=isHome && p.home!=null ? p.home : isAway && p.away!=null ? p.away : null;
+  const otherSide=isHome && p.away!=null ? p.away : isAway && p.home!=null ? p.home : null;
+  const predClear=predSide!=null && otherSide!=null ? predSide >= otherSide + 5 : false;
+  const formSide=isHome && h.winRate!=null && a.winRate!=null ? h.winRate : isAway && h.winRate!=null && a.winRate!=null ? a.winRate : null;
+  const formOther=isHome && h.winRate!=null && a.winRate!=null ? a.winRate : isAway && h.winRate!=null && a.winRate!=null ? h.winRate : null;
+  const formClear=formSide!=null && formOther!=null ? formSide >= formOther + 4 : false;
+
   if((label.includes("1,5")||label.includes("2,5"))&&p.homeGoals!=null&&p.awayGoals!=null)add(`Golos previstos: ${(p.homeGoals+p.awayGoals).toFixed(1)}`);
   if(label.includes("casa ou empate")&&p.home!=null&&p.draw!=null)add(`Prediction: ${Math.round(p.home)}% casa + ${Math.round(p.draw)}% empate`);
   if(label.includes("fora ou empate")&&p.away!=null&&p.draw!=null)add(`Prediction: ${Math.round(p.away)}% fora + ${Math.round(p.draw)}% empate`);
   if(label.includes("Vitória da equipa da casa")&&p.home!=null)add(`Prediction: ${Math.round(p.home)}% casa`);
   if(label.includes("Vitória da equipa visitante")&&p.away!=null)add(`Prediction: ${Math.round(p.away)}% fora`);
   if(h2.n>=2)add(`H2H: ${h2.n} jogos`);
-  if(h.winRate!=null&&a.winRate!=null&&(label.includes("casa")||label.includes("fora")))add(`Forma: ${Math.round(h.winRate)}% vs ${Math.round(a.winRate)}%`);
+  if(formSide!=null&&formOther!=null&&(isHome||isAway))add(`Forma: ${Math.round(formSide)}% vs ${Math.round(formOther)}%`);
+
+  // Explicação honesta da concordância: só usamos esta expressão quando
+  // Prediction e pelo menos um sinal independente apontam para o mesmo lado.
+  if((isHome||isAway) && predClear && formClear) add("Prediction + forma alinhadas");
+  else if((isHome||isAway) && formClear && !predClear) add("Forma favorece este lado; Prediction sem vantagem clara");
+  else if((isHome||isAway) && predClear && !formClear) add("Prediction favorece este lado; forma sem vantagem clara");
+
   return bits.slice(0,3).join("; ")||"Sem evidência suficiente para uma recomendação forte.";
 }
 function marketStrength(m,p,comp){
@@ -295,7 +311,7 @@ export default async function handler(req,res){
           id:f.fixture.id,home:f.teams.home.name,away:f.teams.away.name,league:league.name,
           time:new Intl.DateTimeFormat("pt-PT",{timeZone:"Europe/Lisbon",hour:"2-digit",minute:"2-digit"}).format(new Date(f.fixture.date)),kickoff:f.fixture.date,
           score,suggestion:best,suggestions,dataQuality:quality(evidence),evidenceCount:evidence,
-          coverage:{season:f.league.season,predictions:pr.ok,label:pr.ok?(bestMarket?"Prediction + sinais concordantes":"Prediction sem vantagem clara"):"Sem Prediction"},
+          coverage:{season:f.league.season,predictions:pr.ok,label:pr.ok?(bestMarket?((bestMarket.support||[]).length>0?"Prediction + evidência complementar":"Prediction isolada"):"Prediction sem vantagem clara"):"Sem Prediction"},
           dataPoints:{historyHome:comp.homeForm!=null?5:0,historyAway:comp.awayForm!=null?5:0,h2h:h2.n,prediction:p.available,standingsHome:false,standingsAway:false},
           endpointDiagnostics:{predictions:cdiag.prediction,formCasa:{status:comp.homeForm!=null?"OK":"vazio",ok:comp.homeForm!=null,results:comp.homeForm!=null?1:0,reason:comp.homeForm!=null?"comparison.form da Prediction":"não disponível na Prediction"},formFora:{status:comp.awayForm!=null?"OK":"vazio",ok:comp.awayForm!=null,results:comp.awayForm!=null?1:0,reason:comp.awayForm!=null?"comparison.form da Prediction":"não disponível na Prediction"},h2h:{status:h2.n||comp.homeH2H!=null?"OK":"vazio",ok:h2.n>0||comp.homeH2H!=null,results:h2.n,reason:h2.n?`${h2.n} H2H na Prediction`:comp.homeH2H!=null?"comparação H2H na Prediction":"não disponível"},standings:{status:"não testado",ok:false,results:0,reason:"não chamado nesta versão para respeitar o limite/minuto"},teamStatsHome:{status:"não testado",ok:false,results:0,reason:"não chamado nesta versão; Prediction já fornece comparação"},teamStatsAway:{status:"não testado",ok:false,results:0,reason:"não chamado nesta versão; Prediction já fornece comparação"}},
           metrics:{form:`${comp.homeForm!=null?Math.round(comp.homeForm):"—"}% / ${comp.awayForm!=null?Math.round(comp.awayForm):"—"}%`,goals:`${p.homeGoals!=null?p.homeGoals.toFixed(1):"—"} / ${p.awayGoals!=null?p.awayGoals.toFixed(1):"—"}`,api:`${p.home!=null?Math.round(p.home):"—"}% / ${p.draw!=null?Math.round(p.draw):"—"}% / ${p.away!=null?Math.round(p.away):"—"}%`,table:"—",h2h:h2.n||"—",comparison:`${comp.homeAttack!=null?Math.round(comp.homeAttack):"—"}% / ${comp.awayAttack!=null?Math.round(comp.awayAttack):"—"}% ataque`}
