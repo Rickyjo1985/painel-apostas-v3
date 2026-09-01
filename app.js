@@ -6,7 +6,45 @@ const MIN_SCORE = 50;
 const TOP_LIMIT = 5;
 function clamp(n, a=0, b=100) { return Math.max(a, Math.min(b, Number(n) || 0)); }
 const HIST_KEY = "painel_v14_historico";
+const QUOTA_GUARD_KEY = "painel_v1422_quota_guard";
+const QUOTA_LIMIT_DEFAULT = 100;
 let historicoSugestoes = JSON.parse(localStorage.getItem(HIST_KEY) || "[]");
+
+function utcDayKey(date = new Date()) {
+  return date.toISOString().slice(0, 10);
+}
+function getQuotaGuard() {
+  try {
+    const raw = localStorage.getItem(QUOTA_GUARD_KEY);
+    if (!raw) return null;
+    const data = JSON.parse(raw);
+    if (!data || data.day !== utcDayKey()) {
+      localStorage.removeItem(QUOTA_GUARD_KEY);
+      return null;
+    }
+    return data;
+  } catch {
+    localStorage.removeItem(QUOTA_GUARD_KEY);
+    return null;
+  }
+}
+function setQuotaGuard(remaining = 0, limit = QUOTA_LIMIT_DEFAULT, reason = "limite diário atingido") {
+  const data = { day: utcDayKey(), remaining: Number(remaining) || 0, limit: Number(limit) || QUOTA_LIMIT_DEFAULT, reason, savedAt: new Date().toISOString() };
+  localStorage.setItem(QUOTA_GUARD_KEY, JSON.stringify(data));
+  return data;
+}
+function clearQuotaGuard() {
+  localStorage.removeItem(QUOTA_GUARD_KEY);
+}
+function isDailyQuotaError(message) {
+  return /request limit for the day|limit for the day|daily limit|quota.*(day|daily)|reached.*limit.*day|limite diário|quota diária/i.test(String(message || ""));
+}
+function quotaResetText() {
+  const now = new Date();
+  const next = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1));
+  const hours = Math.max(0, Math.ceil((next.getTime() - now.getTime()) / 3600000));
+  return `A quota diária é renovada após o próximo reset UTC (aprox. ${hours}h).`;
+}
 
 function verificarSenha() {
   if (document.getElementById("password").value === PSW) {
@@ -70,6 +108,15 @@ async function carregarMelhoresJogos(force = false) {
   const status = document.getElementById("games-status");
   const container = document.getElementById("games-container");
   const btn = document.getElementById("btn-refresh-games");
+  const guard = getQuotaGuard();
+  if (guard) {
+    status.className = "games-status quota-box";
+    status.innerHTML = `🛑 <b>API-Football atingiu a quota diária.</b><br><small>O painel não fará novos pedidos para proteger a quota. ${quotaResetText()}</small>`;
+    if (btn) { btn.disabled = true; btn.title = "Quota diária da API atingida"; }
+    renderizarDiagnostico();
+    renderizarJogos();
+    return;
+  }
   status.className = "games-status loading";
   status.innerText = "A analisar os jogos reais de hoje…";
   container.innerHTML = "";
@@ -93,8 +140,12 @@ async function carregarMelhoresJogos(force = false) {
     ultimoDiagnostico = data.diagnostics || null;
     baseJogos = calibrarJogos(data.games || []);
     document.getElementById("games-date").innerText = `${data.dateLabel || "Hoje"} · ${data.analyzed || 0} jogos analisados · ${data.selected ?? (data.games || []).length} melhores opções`;
+    const quotaRemaining = Number(data.diagnostics?.quotaRemaining);
+    const quotaLimit = Number(data.diagnostics?.quotaLimit) || QUOTA_LIMIT_DEFAULT;
+    if (Number.isFinite(quotaRemaining) && quotaRemaining <= 0) setQuotaGuard(0, quotaLimit, "quota diária esgotada");
+    else clearQuotaGuard();
     status.className = "games-status success";
-    const remaining = data.diagnostics?.quotaRemaining != null ? ` · quota restante: ${data.diagnostics.quotaRemaining}` : "";
+    const remaining = Number.isFinite(quotaRemaining) ? ` · quota restante: ${quotaRemaining}` : "";
     status.innerText = baseJogos.length
       ? `Foram seleccionadas ${baseJogos.length} das melhores oportunidades com pelo menos 3 sinais reais. A confiança é uma estimativa estatística; o Score mede a força e a concordância dos sinais, não uma garantia de resultado.${remaining}`
       : ((data.analyzed || 0) > 0 ? `Foram analisados ${data.analyzed} jogos, mas nenhum reuniu pelo menos 3 sinais reais. O modelo não vai recomendar apostas com dados insuficientes.${remaining}` : "Não foram encontrados jogos pré-jogo nas competições disponíveis.");
@@ -103,10 +154,18 @@ async function carregarMelhoresJogos(force = false) {
   } catch (err) {
     console.error(err);
     baseJogos = [];
-    status.className = "games-status error-box";
-    status.innerHTML = `⚠️ ${escapeHtml(err.message)}<br><small>Se ainda não configuraste a API, adiciona <b>APIFOOTBALL_KEY</b> nas Environment Variables da Vercel e faz novo deploy.</small>`;
+    if (isDailyQuotaError(err.message)) {
+      const guardData = setQuotaGuard(err.remaining ?? 0, err.limit ?? QUOTA_LIMIT_DEFAULT, "quota diária atingida");
+      status.className = "games-status quota-box";
+      status.innerHTML = `🛑 <b>API-Football atingiu o limite diário.</b><br><small>Pedidos restantes: ${guardData.remaining}/${guardData.limit}. ${quotaResetText()} O histórico e a calibração continuam disponíveis sem chamar a API.</small>`;
+    } else {
+      status.className = "games-status error-box";
+      status.innerHTML = `⚠️ ${escapeHtml(err.message)}<br><small>Se a mensagem indicar limite diário, não é necessário alterar a <b>APIFOOTBALL_KEY</b>. Caso contrário, confirma a variável nas Environment Variables da Vercel.</small>`;
+    }
+    renderizarHistorico();
+    renderizarCalibracao();
   } finally {
-    if (btn) btn.disabled = false;
+    if (btn && !getQuotaGuard()) { btn.disabled = false; btn.title = "Actualizar jogos e análise"; }
   }
 }
 
