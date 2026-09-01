@@ -434,7 +434,7 @@ function gerarDadosLaboratorio() {
     kickoff:new Date(hoje.getTime()-(i+1)*3600000).toISOString(),
     home:["Benfica","Barcelona","Sporting","Real Madrid","Porto","Braga","Arsenal","Inter","PSV","Ajax","Roma","Lyon"][i],
     away:["Estoril","Rayo Vallecano","Arouca","Getafe","Rio Ave","Boavista","Chelsea","Milan","Feyenoord","Utrecht","Lazio","Nice"][i],
-    league:"Laboratório V1.4.24", market:mercados[i], label:mercados[i], reason:"Resultado de teste para validar Histórico e calibração.",
+    league:"Laboratório V1.4.25", market:mercados[i], label:mercados[i], reason:"Resultado de teste para validar Histórico e calibração.",
     confidence:confidences[i], rawConfidence:confidences[i], score, rawScore:score, scoreBucket:faixaScore(score),
     resultado:results[i], savedAt:hoje.toISOString(), resolvedAt:hoje.toISOString(), laboratorio:true
   }));
@@ -458,7 +458,7 @@ function renderizarLaboratorio() {
   const gap=rate==null?null:rate-avg;
   const status=resolved.length>=5?"🟢 Amostra de teste suficiente":"🟡 Gere os dados de teste para começar";
   c.innerHTML=`<div class="lab-panel">
-    <div class="lab-head"><div><h3>🧪 Laboratório V1.4.24</h3><p>Ambiente isolado para testar Histórico, resultados e calibração <b>sem fazer pedidos à API-Football</b>. Os dados daqui não entram no histórico real.</p></div><span class="lab-badge">🚫 API: 0 pedidos</span></div>
+    <div class="lab-head"><div><h3>🧪 Laboratório V1.4.25</h3><p>Ambiente isolado para testar Histórico, resultados e calibração <b>sem fazer pedidos à API-Football</b>. Os dados daqui não entram no histórico real.</p></div><span class="lab-badge">🚫 API: 0 pedidos</span></div>
     <div class="lab-actions"><button class="btn-lab" onclick="gerarDadosLaboratorio()">🧪 Gerar 12 resultados de teste</button><button class="btn-lab-secondary" onclick="limparLaboratorio()">🗑 Limpar laboratório</button></div>
     <div class="history-summary"><div><strong>${laboratorioSugestoes.length}</strong><small>Dados de teste</small></div><div><strong>${resolved.length}</strong><small>Avaliados</small></div><div><strong>${rate==null?"—":rate+"%"}</strong><small>Acerto teste</small></div><div><strong>${gap==null?"—":(gap>0?"+":"")+gap+" pp"}</strong><small>Real − previsto</small></div></div>
     <div class="calibration-status"><b>${status}</b><span>${resolved.length?`Confiança média ${avg}% · ${gap==null?"—":`diferença ${gap>0?"+":""}${gap} pp`}`:"Nenhum resultado de teste criado."}</span></div>
@@ -586,10 +586,40 @@ function renderizarCalibracao() {
     return {bucket,n:items.length,rate,pred,diff};
   });
 
+  // V1.4.25 — quadro de auditoria do ajuste adaptativo.
+  // Mostra exactamente como o histórico pode alterar o Score, sem usar o laboratório.
+  const auditGroups={};
+  resolved.forEach(x=>{
+    const market=x.market || "—";
+    const bucket=x.scoreBucket || faixaScore(x.score);
+    const key=market+"||"+bucket;
+    if(!auditGroups[key]) auditGroups[key]={market,bucket,items:[]};
+    auditGroups[key].items.push(x);
+  });
+  const auditRows=Object.values(auditGroups).sort((a,b)=>b.items.length-a.items.length).slice(0,12).map(g=>{
+    const items=g.items;
+    const wins=items.filter(x=>x.resultado==="ganha").length;
+    const rate=Math.round(wins/items.length*100);
+    const avgConf=Math.round(items.reduce((s,x)=>s+clamp(x.confidence ?? x.rawConfidence ?? 50),0)/items.length);
+    const avgRaw=Math.round(items.reduce((s,x)=>s+clamp(x.rawScore ?? x.score ?? 0),0)/items.length);
+    const gapLocal=rate-avgConf;
+    const weight=Math.min(1,items.length/20);
+    const adjustment=Math.round(gapLocal*0.35*weight*10)/10;
+    const preview=Math.round(clamp(avgRaw+adjustment,0,100));
+    const state=items.length>=5 ? "🟢 Activo" : "⚪ A recolher";
+    return {market:g.market,bucket:g.bucket,n:items.length,rate,avgConf,avgRaw,adjustment,preview,state};
+  });
+
+  const globalAdjustment = gap==null || resolved.length<5 ? 0 : Math.round(gap*0.35*Math.min(1,resolved.length/20)*10)/10;
+  const adaptiveState = resolved.length < 5 ? "Calibração ainda não activa" : "Calibração adaptativa activa";
+  const adaptiveDetail = resolved.length < 5
+    ? `Faltam ${5-resolved.length} resultados reais avaliados para permitir qualquer ajuste.`
+    : `Ajuste global de referência: ${globalAdjustment>0?"+":""}${globalAdjustment} pontos · amostra real: ${resolved.length}`;
+
   c.innerHTML=`
     <div class="calibration-panel">
       <h3>📊 Calibração real do modelo</h3>
-      <p>A confiança passa a ser comparada com o resultado real. O sistema só usa uma calibração automática depois de <b>5 resultados avaliados</b>. A prioridade é <b>mercado + faixa de Score</b>; depois mercado; antes disso mantém a confiança inicial.</p>
+      <p>A confiança é comparada com os resultados reais. A calibração adaptativa só pode alterar o Score após <b>5 resultados reais avaliados</b>. O Laboratório é ignorado.</p>
       <div class="history-summary">
         <div><strong>${overall==null?"—":overall+"%"}</strong><small>Acerto real</small></div>
         <div><strong>${avgPred==null?"—":avgPred+"%"}</strong><small>Confiança média prevista</small></div>
@@ -597,7 +627,18 @@ function renderizarCalibracao() {
         <div><strong>${resolved.length}</strong><small>Resultados avaliados</small></div>
       </div>
       <div class="calibration-status"><b>${gapLabel}</b><span>${resolved.length<5?`Ainda faltam ${5-resolved.length} resultados para activar a calibração.`:"Amostra mínima global atingida; cada mercado/faixa continua a exigir a sua própria amostra."}</span></div>
-      ${rows.length ? `<div class="calibration-table"><div class="ct-head"><span>Mercado</span><span>Amostra</span><span>Acerto</span><span>Estado</span></div>${rows.map(([market,items])=>{
+
+      <div class="adaptive-calibration-box">
+        <div><b>🧠 ${adaptiveState}</b><small>${adaptiveDetail}</small></div>
+        <span class="adaptive-badge">${resolved.length<5?"SEM AJUSTE":"AJUSTE CONTROLADO"}</span>
+      </div>
+
+      <h4 class="calibration-subtitle">🎯 Auditoria do Score adaptativo</h4>
+      <p class="calibration-explain">O valor <b>Original</b> é o Score guardado na previsão. <b>Calibrado</b> é uma prévia do Score após aplicar a diferença real, com peso progressivo pela dimensão da amostra. Nenhum ajuste é aplicado ao histórico retroactivamente.</p>
+      ${auditRows.length ? `<div class="calibration-table adaptive-table"><div class="ct-head"><span>Mercado / faixa</span><span>Amostra</span><span>Real / previsto</span><span>Score</span></div>${auditRows.map(r=>`
+        <div class="ct-row"><span><b>${escapeHtml(r.market)}</b><small>${escapeHtml(r.bucket)} · ${r.state}</small></span><span>${r.n}</span><span>${r.rate}% / ${r.avgConf}%<small>${r.adjustment>0?"+":""}${r.adjustment} pts</small></span><span>${r.avgRaw} → <b>${r.preview}</b></span></div>`).join("")}</div>` : `<div class="history-empty">Ainda não há resultados reais avaliados para auditar o ajuste do Score.</div>`}
+
+      ${rows.length ? `<h4 class="calibration-subtitle">📚 Desempenho por mercado</h4><div class="calibration-table"><div class="ct-head"><span>Mercado</span><span>Amostra</span><span>Acerto</span><span>Estado</span></div>${rows.map(([market,items])=>{
         const wins=items.filter(x=>x.resultado==="ganha").length, rate=Math.round(wins/items.length*100);
         const avg=Math.round(items.reduce((s,x)=>s+clamp(x.confidence ?? x.rawConfidence ?? 50),0)/items.length);
         const diff=rate-avg;
@@ -605,11 +646,12 @@ function renderizarCalibracao() {
         items.forEach(x=>{ const b=x.scoreBucket||faixaScore(x.score); if(!buckets[b]) buckets[b]=[]; buckets[b].push(x); });
         const faixaInfo=Object.entries(buckets).sort((a,b)=>b[1].length-a[1].length).map(([b,v])=>`${b}: ${v.length}`).join(" · ");
         return `<div class="ct-row"><span>${escapeHtml(market)}<small>${escapeHtml(faixaInfo)} · média prevista ${avg}% · ${diff>0?"+":""}${diff} pp</small></span><span>${items.length}</span><span>${rate}%</span><span>${items.length>=5?"🟢 Calibrável":"⚪ A recolher dados"}</span></div>`;
-      }).join("")}</div>` : `<div class="history-empty">Ainda não há resultados avaliados.</div>`}
+      }).join("")}</div>` : ""}
+
       <h4 class="calibration-subtitle">📈 Precisão por faixa de Score</h4>
       <div class="calibration-table"><div class="ct-head"><span>Faixa</span><span>Amostra</span><span>Real / previsto</span><span>Estado</span></div>${bucketRows.map(r=>`
         <div class="ct-row"><span><b>${r.bucket}</b></span><span>${r.n}</span><span>${r.rate==null?"—":`${r.rate}% / ${r.pred}% (${r.diff>0?"+":""}${r.diff} pp)`}</span><span>${r.n>=5?"🟢 Amostra útil":`⚪ ${r.n}/5`}</span></div>`).join("")}</div>
-      <div class="calibration-help"><b>Como ler:</b> <span>+5 pp significa que o modelo acertou 5 pontos percentuais acima da confiança média. Valores negativos indicam que a confiança estava demasiado alta.</span></div>
+      <div class="calibration-help"><b>Como ler:</b> <span>valores negativos indicam sobreconfiança; positivos indicam que o modelo estava conservador. O ajuste do Score é deliberadamente pequeno e progressivo para evitar que uma amostra curta distorça o ranking.</span></div>
     </div>`;
 }
 
