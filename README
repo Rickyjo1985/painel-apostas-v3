@@ -1,23 +1,13 @@
-# Painel Avançado Multibancas — V1.4.18
+# Painel Avançado Multibancas — V1.4.22
 
-V1.4.18 transforma o Histórico numa base de dados local mais completa para a calibração real do modelo.
+V1.4.22 mantém o algoritmo e a calibração e acrescenta protecção da quota da API-Football.
 
-## Novidades
-- Cada sugestão guardada mantém um snapshot dos sinais, Score, confiança, explicação, qualidade dos dados e cobertura.
-- Histórico com estado Pendente / Ganha / Perdida e possibilidade de reabrir um resultado.
-- Datas de guarda e resolução visíveis.
-- Calibração mostra acerto global, por mercado e por faixa de Score.
-- A faixa de Score só passa a ser considerada amostra útil para calibração a partir de 5 resultados avaliados.
-- Não adiciona chamadas externas nem altera a quota da API.
-
-## Fluxo recomendado
-1. Guardar as oportunidades que quer acompanhar.
-2. Depois do jogo, marcar Ganha ou Perdida.
-3. Deixar o histórico acumular amostras.
-4. Usar a aba Calibração para acompanhar quando cada faixa atingir a amostra mínima.
-
-
-V1.4.21: correção dos separadores Histórico e Calibração. Os IDs dos botões passam a corresponder aos IDs usados por mostrarSubAbaJogos(), permitindo alternar e renderizar corretamente as duas vistas.
-
-
-V1.4.21: corrige o mapeamento dos painéis Histórico/Calibração e remove o cursor de espera dos botões Guardar já desativados.
+## Alterações
+- Detecta automaticamente o limite diário da API-Football.
+- Não repete pedidos enquanto a quota diária estiver esgotada.
+- Guarda localmente o estado da quota por dia UTC.
+- Mostra uma mensagem clara em vez de sugerir que falta a APIFOOTBALL_KEY.
+- Mantém Histórico e Calibração disponíveis sem chamadas à API.
+- A API devolve HTTP 429 quando o limite diário é atingido.
+- A quota apresentada no diagnóstico é actualizada com o último pedido efectuado.
+- Mantém cache de 30 minutos e no máximo 6 chamadas por execução (fixtures + até 5 predictions).
