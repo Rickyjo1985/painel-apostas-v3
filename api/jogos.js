@@ -173,14 +173,23 @@ function marketReason(label,h,a,h2,p){
   // Isto evita chamar "alinhados" a um cenário como 50% fora + 50% empate
   // quando a casa também tem 50%.
   let predSide=null, otherSide=null;
+  let predDirectional=false;
   if(isDoubleHome && p.home!=null && p.draw!=null && p.away!=null){
     predSide=p.home+p.draw; otherSide=p.away;
+    // Para dupla casa/empate, 50% casa + 50% empate é uma Prediction
+    // forte para o par, mas não é uma vantagem direcional para a casa.
+    predDirectional = p.home >= p.draw + 5;
   } else if(isDoubleAway && p.away!=null && p.draw!=null && p.home!=null){
     predSide=p.away+p.draw; otherSide=p.home;
+    // Para dupla fora/empate, 50% fora + 50% empate é uma Prediction
+    // forte para o par, mas não é uma vantagem direcional para fora.
+    predDirectional = p.away >= p.draw + 5;
   } else if(isHomeWin && p.home!=null && p.away!=null && p.draw!=null){
     predSide=p.home; otherSide=Math.max(p.away,p.draw);
+    predDirectional = p.home >= Math.max(p.away,p.draw) + 5;
   } else if(isAwayWin && p.away!=null && p.home!=null && p.draw!=null){
     predSide=p.away; otherSide=Math.max(p.home,p.draw);
+    predDirectional = p.away >= Math.max(p.home,p.draw) + 5;
   }
   const predClear=predSide!=null && otherSide!=null ? predSide >= otherSide + 5 : false;
 
@@ -197,11 +206,12 @@ function marketReason(label,h,a,h2,p){
   if(h2.n>=2)add(`H2H: ${h2.n} jogos`);
   if(formSide!=null&&formOther!=null&&(isHome||isAway))add(`Forma: ${Math.round(formSide)}% vs ${Math.round(formOther)}%`);
 
-  if((isHome||isAway) && predClear && formClear) add("Prediction + forma alinhadas");
-  else if((isHome||isAway) && predClear && formContradicts) add("Prediction favorece este lado; forma favorece o adversário");
-  else if((isHome||isAway) && formClear && !predClear) add("Forma favorece este lado; Prediction sem vantagem clara");
-  else if((isHome||isAway) && predClear && !formClear) add("Prediction favorece este lado; forma sem vantagem clara");
-  else if((isHome||isAway) && !predClear && !formClear) add("Prediction equilibrada; forma sem vantagem clara");
+  if((isHome||isAway) && predDirectional && formClear) add("Prediction + forma alinhadas");
+  else if((isHome||isAway) && predDirectional && formContradicts) add("Prediction favorece este lado; forma favorece o adversário");
+  else if((isHome||isAway) && formClear && !predDirectional) add("Forma favorece este lado; Prediction equilibrada");
+  else if((isHome||isAway) && predDirectional && !formClear) add("Prediction favorece este lado; forma sem vantagem clara");
+  else if((isHome||isAway) && !predDirectional && formContradicts) add("Prediction equilibrada; forma favorece o adversário");
+  else if((isHome||isAway) && !predDirectional && !formClear && !formContradicts) add("Prediction equilibrada; forma sem vantagem clara");
 
   return bits.slice(0,3).join("; ")||"Sem evidência suficiente para uma recomendação forte.";
 }
