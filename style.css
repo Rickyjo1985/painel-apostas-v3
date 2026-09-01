@@ -16,7 +16,7 @@ body{font-family:'Segoe UI',Tahoma,Geneva,Verdana,sans-serif;background:var(--li
 .form-section{background:var(--light);padding:20px;border-radius:8px;height:fit-content}
 input,select{width:100%;padding:10px;margin:8px 0 15px;border:1px solid #ccc;border-radius:6px;font-size:14px}
 button{background:var(--primary);color:white;border:none;padding:12px;border-radius:6px;cursor:pointer;font-size:15px;width:100%;font-weight:bold;transition:.2s}
-button:hover{opacity:.9}button:disabled{opacity:.55;cursor:wait}
+button:hover{opacity:.9}button:disabled{opacity:.55;cursor:default}
 .btn-logout{background:#666;width:auto;padding:8px 15px;font-size:14px}.btn-refresh{width:auto;padding:9px 14px}
 .house-filters,.game-filters{display:flex;gap:10px;margin-bottom:20px;overflow-x:auto;padding-bottom:5px}
 .btn-filter{background:#e2e8f0;color:var(--dark);padding:8px 16px;font-size:13px;width:auto;border-radius:20px;white-space:nowrap}
@@ -62,7 +62,7 @@ select.table-select{width:auto;padding:4px 8px;margin:0;font-size:13px;display:i
 .calibration-note{margin-top:10px;padding:8px 10px;background:#f8fafc;border-radius:6px;color:#64748b;font-size:12px}
 .card-actions{display:flex;gap:8px;flex-wrap:wrap}
 .btn-history{background:#475569;width:auto;padding:9px 12px;font-size:13px}
-.btn-history:disabled{background:#10b981;color:#fff;opacity:1}
+.btn-history:disabled{background:#10b981;color:#fff;opacity:1;cursor:default}
 .history-empty{background:#f8fafc;border:1px dashed #cbd5e1;border-radius:10px;padding:25px;text-align:center;color:#64748b;margin-top:15px}
 .history-summary{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin:15px 0}
 .history-summary>div{background:#f8fafc;border:1px solid #e2e8f0;border-radius:9px;padding:15px;text-align:center}
