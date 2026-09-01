@@ -154,3 +154,11 @@ A V1.3 usa API-Football como fonte de dados e ordena os jogos por um score próp
 - Mercados de golos só entram quando existe evidência suficiente.
 - Jogos sem recomendação forte não entram no TOP.
 - Namespace de cache actualizado para evitar mistura com V1.4.11.
+
+
+## V1.4.13
+- Score separado de confiança.
+- Recomendações exigem concordância direcional; 50/50 sem apoio independente não gera aposta.
+- Dupla possibilidade exige pelo menos um sinal direcional independente, salvo vantagem clara da Prediction.
+- Score penaliza sinais contraditórios e considera qualidade/evidência.
+- Cache namespaced em v1413.
