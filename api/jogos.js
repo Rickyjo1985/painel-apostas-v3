@@ -100,7 +100,7 @@ function extractCoverage(leagueRow){
     end:s.end||null,
     fixtures:true,
     fixtureEvents:c.fixtures?.events===true,
-    fixtureStatistics:c.fixtures?.statistics_fixtures===true || c.fixtures?.statistics===true,
+    fixtureStatistics:c.fixtures?.statistics_fixtures===true || c.fixtures?.statistics===true || c.fixtures?.statistics?.fixtures===true,
     standings:c.standings===true,
     predictions:c.predictions===true,
     odds:c.odds===true,
@@ -248,7 +248,7 @@ export default async function handler(req,res){
   try{
     const date=dateInLisbon();
     const force=String(req?.query?.force||"")==="1";
-    const result=await cached(`v148:${date}`,async()=>{
+    const result=await cached(`v149:${date}`,async()=>{
       const fixtureCall=await apiFetch("/fixtures",{date,timezone:"Europe/Lisbon"});
       const fixtures=fixtureCall.response;
       const upcoming=fixtures.filter(f=>["NS","TBD"].includes(f.fixture?.status?.short)&&!BLOCKED.test(f.league?.name||""));
@@ -259,7 +259,7 @@ export default async function handler(req,res){
       const leagueMeta=new Map();
       for(const key of leagueKeys){
         const [leagueId,fixtureSeason]=key.split(":");
-        const call=await optionalApi("/leagues",{id:leagueId,season:fixtureSeason},false,COVERAGE_TTL_MS);
+        const call=await optionalApi("/leagues",{id:leagueId},false,COVERAGE_TTL_MS);
         const row=call.response?.[0];
         const chosen=chooseSeason(row,fixtureSeason,prelim.find(x=>String(x.f.league.id)===leagueId)?.f.fixture.date);
         const coverage=chosen?extractCoverage({seasons:[chosen]}):{year:num(fixtureSeason),current:false,fixtures:true,fixtureEvents:false,fixtureStatistics:false,standings:false,predictions:false,odds:false,players:false};
@@ -305,12 +305,15 @@ export default async function handler(req,res){
           }
 
           // Recent fixtures and H2H remain useful even when a competition has no standings/predictions.
-          const [hf,af,hh,pr]=await Promise.all([
-            cached(`v148:h:${hid}`,()=>optionalApi("/fixtures",{team:hid,last:10},force),force),
-            cached(`v148:a:${aid}`,()=>optionalApi("/fixtures",{team:aid,last:10},force),force),
-            cached(`v148:h2h:${hid}-${aid}`,()=>optionalApi("/fixtures/headtohead",{h2h:`${hid}-${aid}`,last:10},force),force),
-            coverage.predictions ? cached(`v148:p:${f.fixture.id}`,()=>optionalApi("/predictions",{fixture:f.fixture.id},force),force) : Promise.resolve({ok:false,response:[],error:"prediction não coberta para esta competição/época"})
+          const [hf0,af0,hh,pr]=await Promise.all([
+            cached(`v149:h:${hid}:${leagueId}:${season}`,()=>optionalApi("/fixtures",{team:hid,league:leagueId,season,last:10},force),force),
+            cached(`v149:a:${aid}:${leagueId}:${season}`,()=>optionalApi("/fixtures",{team:aid,league:leagueId,season,last:10},force),force),
+            cached(`v149:h2h:${hid}-${aid}`,()=>optionalApi("/fixtures/headtohead",{h2h:`${hid}-${aid}`,last:10},force),force),
+            coverage.predictions !== false ? cached(`v149:p:${f.fixture.id}`,()=>optionalApi("/predictions",{fixture:f.fixture.id},force),force) : Promise.resolve({ok:false,response:[],error:"prediction não coberta para esta competição/época"})
           ]);
+          // Some competitions expose team history globally but not when scoped to the current season.
+          const hf = hf0.response.length ? hf0 : await cached(`v149:h-fallback:${hid}`,()=>optionalApi("/fixtures",{team:hid,last:10},force),force);
+          const af = af0.response.length ? af0 : await cached(`v149:a-fallback:${aid}`,()=>optionalApi("/fixtures",{team:aid,last:10},force),force);
 
           const h=historyFeatures(hf.response,hid),a=historyFeatures(af.response,aid),h2=h2hFeatures(hh.response),p=predictionData(pr.response?.[0]);
           const sh=sm.get(hid)||null,sa=sm.get(aid)||null;
@@ -343,8 +346,9 @@ export default async function handler(req,res){
           cdiag.evidenceCount=evidenceCount;cdiag.dataQuality=dataQuality;cdiag.sources={historyHome:h.n,historyAway:a.n,h2h:h2.n,prediction:p.available,standingsHome:!!sh,standingsAway:!!sa};
           diagnostics.competitions.push(cdiag);
           for(const [endpoint,call] of [["fixtures-home",hf],["fixtures-away",af],["h2h",hh],["predictions",pr]]){
-            if(call?.error) diagnostics.optionalErrors.push({fixture:f.fixture.id,endpoint,error:call.error});
+            if(call?.error) diagnostics.optionalErrors.push({fixture:f.fixture.id,endpoint,error:call.error,remaining:call.remaining??null});
           }
+          if(meta && meta.ok===false) diagnostics.optionalErrors.push({fixture:f.fixture.id,endpoint:"leagues",error:meta.error||"sem metadata da competição"});
         }catch(err){
           failures.push({fixture:f.fixture.id,error:err.message});
           diagnostics.optionalErrors.push({fixture:f.fixture.id,endpoint:"candidate",error:err.message});
@@ -355,12 +359,12 @@ export default async function handler(req,res){
       // Prefer games with stronger evidence. Score still matters, but data quality is a first-class criterion.
       out.sort((a,b)=>((b.evidenceCount*8+b.score)-(a.evidenceCount*8+a.score))||(new Date(a.kickoff)-new Date(b.kickoff)));
       const recommendable=out.filter(g=>g.evidenceCount>=3);
-      const games=(recommendable.length?recommendable:out).slice(0,TOP_LIMIT);
+      const games=recommendable.slice(0,TOP_LIMIT);
       return {fixturesFound:fixtures.length,candidates:candidates.length,analyzedCount:out.length,failures:failures.length,recommendable:recommendable.length,games,diagnostics};
     },force);
 
     res.status(200).json({
-      ok:true,version:"1.4.8",date,dateLabel:labelDate(date),fixturesFound:result.fixturesFound,
+      ok:true,version:"1.4.9",date,dateLabel:labelDate(date),fixturesFound:result.fixturesFound,
       candidates:result.candidates,analyzed:result.analyzedCount,recommendable:result.recommendable,selected:result.games.length,games:result.games,
       diagnostics:result.diagnostics,cached:!force
     });
