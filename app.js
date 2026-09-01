@@ -91,11 +91,12 @@ async function carregarMelhoresJogos(force = false) {
     }
     if (!response.ok) throw new Error(data.error || "Não foi possível obter os jogos.");
     baseJogos = calibrarJogos(data.games || []);
-    document.getElementById("games-date").innerText = `${data.dateLabel || "Hoje"} · ${data.analyzed || 0} jogos analisados · ${data.selected ?? (data.games || []).length} oportunidades`;
+    document.getElementById("games-date").innerText = `${data.dateLabel || "Hoje"} · ${data.analyzed || 0} jogos analisados · ${data.selected ?? (data.games || []).length} melhores opções`;
     status.className = "games-status success";
+    const remaining = data.diagnostics?.quotaRemaining != null ? ` · quota restante: ${data.diagnostics.quotaRemaining}` : "";
     status.innerText = baseJogos.length
-      ? `Foram seleccionadas ${baseJogos.length} das melhores oportunidades do dia. A confiança é uma estimativa estatística, não uma garantia.`
-      : ((data.analyzed || 0) > 0 ? "Os jogos foram analisados e ordenados pelo Score. O modelo mostra os melhores disponíveis, mesmo quando os dados são moderados." : "Não foram encontrados jogos pré-jogo nas competições disponíveis.");
+      ? `Foram seleccionadas ${baseJogos.length} das melhores opções do dia. ${data.recommendable ?? baseJogos.length} têm pelo menos 3 sinais de evidência. A confiança é uma estimativa estatística, não uma garantia.${remaining}`
+      : ((data.analyzed || 0) > 0 ? `Os jogos foram analisados, mas os dados disponíveis são insuficientes para recomendações fortes.${remaining}` : "Não foram encontrados jogos pré-jogo nas competições disponíveis.");
     renderizarJogos();
   } catch (err) {
     console.error(err);
@@ -199,6 +200,7 @@ function renderizarJogos() {
   baseJogos.forEach((j, index) => {
     const n = nivelScore(j.score);
     const confidence = Math.round(Math.min(96, Math.max(0, j.suggestion.confidence)));
+    const confidenceLabel = j.dataQuality === "insufficient" ? "Evidência disponível" : "Confiança estimada";
     const alternatives = (j.suggestions || []).filter(s => s.market !== j.suggestion.market).slice(0,2);
     const saved = historicoSugestoes.some(x => String(x.id) === String(j.id));
     const card = document.createElement("div");
@@ -211,7 +213,7 @@ function renderizarJogos() {
         <div class="rank-line"><span class="rank-badge">#${index + 1}</span><span class="score-badge">Score ${j.score}/100</span><span class="level-badge">${n.icon} ${n.label}</span></div>
         <div class="game-meta"><span>⚽ ${escapeHtml(j.league)}</span><span>🕐 ${escapeHtml(j.time)}</span></div>
         <div class="game-title">${escapeHtml(j.home)} <span>vs</span> ${escapeHtml(j.away)}</div>
-        <div class="confidence-line"><span>Confiança estimada</span><strong>${confidence}%</strong></div>
+        <div class="confidence-line"><span>${confidenceLabel}</span><strong>${confidence}%</strong></div>
         <div class="confidence-bar"><span style="width:${Math.min(confidence,100)}%"></span></div>
         <div class="suggestion-box">
           <small>🎯 Sugestão principal</small>
@@ -224,6 +226,7 @@ function renderizarJogos() {
           <span>🤝 H2H ${j.metrics?.h2h ?? "—"}</span>
           <span>🤖 API ${j.metrics?.prediction ?? "—"}</span>
           <span>🏆 Tabela ${j.metrics?.table ?? "—"}</span>
+          <span>📡 ${escapeHtml(j.coverage?.label ?? "Cobertura básica")} · S${escapeHtml(String(j.coverage?.season ?? "—"))}</span>
         </div>
         <div class="evidence-detail">
           ${j.evidence?.homeGF != null || j.evidence?.awayGF != null ? `<span>⚽ Média golos: ${j.evidence.homeGF != null ? j.evidence.homeGF.toFixed(2) : "—"} / ${j.evidence.awayGF != null ? j.evidence.awayGF.toFixed(2) : "—"}</span>` : ""}
@@ -233,7 +236,7 @@ function renderizarJogos() {
         ${alternatives.length ? `<div class="alternatives"><small>Outras leituras</small>${alternatives.map(s => `<div>• ${escapeHtml(s.label)} <b>${Math.round(s.confidence)}%</b></div>`).join("")}</div>` : ""}
       </div>
       <div class="card-footer">
-        <span class="data-note">${j.dataQuality === "high" ? "✓ Dados fortes" : j.dataQuality === "medium" ? "✓ Dados razoáveis" : "⚠ Dados limitados"}</span>
+        <span class="data-note">${j.dataQuality === "high" ? "✓ Dados fortes" : j.dataQuality === "medium" ? "✓ Dados razoáveis" : j.dataQuality === "low" ? "⚠ Dados limitados" : "⛔ Dados insuficientes"} · ${j.evidenceCount ?? 0}/6 sinais</span>
         <div class="card-actions">
           <button class="btn-import" onclick="importarParaFormulario('${jsQuote(`${j.home} vs ${j.away} (${j.suggestion.label})`)}', 1)">⚡ Registar</button>
           <button class="btn-history" onclick="guardarSugestao('${jsQuote(j.id)}')" ${saved ? "disabled" : ""}>${saved ? "✓ Guardada" : "📚 Guardar"}</button>
