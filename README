@@ -1,11 +1,10 @@
-# Painel Apostas V1.4.16
+# Painel Avançado Multibancas — V1.4.17
 
-Correção da interpretação dos sinais entre Prediction e forma.
+V1.4.17 adiciona calibração histórica por faixa de Score, mantendo a V1.4.16 como base.
 
-## Alteração principal
-- Uma dupla possibilidade com Prediction 50%/50% entre a equipa e o empate não é tratada como "Prediction + forma alinhadas".
-- A Prediction só é considerada direcional quando a probabilidade da equipa escolhida supera a do empate por pelo menos 5 pontos percentuais (ou, para vitória simples, supera a melhor alternativa por pelo menos 5 pontos).
-- Quando a forma favorece uma equipa mas a Prediction está equilibrada, a explicação passa a mostrar: "Forma favorece este lado; Prediction equilibrada".
-- Quando Prediction e forma apontam para lados diferentes, a explicação passa a indicar explicitamente a contradição.
-
-A API, o Score, a confiança, o histórico e a arquitectura de baixo consumo não foram alterados.
+## Novidades
+- Histórico guarda também a faixa de Score da sugestão.
+- Calibração prefere mercado + faixa de Score quando existem pelo menos 5 resultados.
+- Sem amostra suficiente, usa histórico do mercado; antes de 5 resultados mantém o valor inicial.
+- O painel mostra a origem da calibração e a distribuição das faixas no separador Calibração.
+- Não altera a API nem adiciona chamadas externas.
