@@ -111,6 +111,7 @@ async function carregarMelhoresJogos(force = false) {
   const container = document.getElementById("games-container");
   const btn = document.getElementById("btn-refresh-games");
   const guard = getQuotaGuard();
+  // V1.4.28: mantém o fallback V1.4.27 e alinha a comunicação da interface com os critérios reais.
   // V1.4.27: se a API-Football estiver bloqueada/sem quota, tentamos o
   // fallback football-data.org em vez de deixar o painel sem jogos.
   status.className = "games-status loading";
@@ -147,8 +148,8 @@ async function carregarMelhoresJogos(force = false) {
     status.className = "games-status success";
     const remaining = Number.isFinite(quotaRemaining) ? ` · quota restante: ${quotaRemaining}` : "";
     status.innerText = baseJogos.length
-      ? `${data.provider === "football-data.org" ? "A API-Football está indisponível; o painel está a usar o fallback football-data.org. " : ""}Foram seleccionadas ${baseJogos.length} das melhores oportunidades com pelo menos 3 sinais reais. A confiança é uma estimativa estatística; o Score mede a força e a concordância dos sinais, não uma garantia de resultado.${remaining}`
-      : ((data.analyzed || 0) > 0 ? `Foram analisados ${data.analyzed} jogos, mas nenhum reuniu pelo menos 3 sinais reais. O modelo não vai recomendar apostas com dados insuficientes.${remaining}` : "Não foram encontrados jogos pré-jogo nas competições disponíveis.");
+      ? `${data.provider === "football-data.org" ? "A API-Football está indisponível; o painel está a usar o fallback football-data.org. " : ""}Foram seleccionadas ${baseJogos.length} das melhores oportunidades. Critérios: pelo menos 4/6 indicadores de dados e Score ≥58. A confiança é uma estimativa estatística; o Score mede a força e a concordância dos sinais, não uma garantia de resultado.${remaining}`
+      : ((data.analyzed || 0) > 0 ? `Foram analisados ${data.analyzed} jogos, mas nenhum reuniu os critérios mínimos: 4/6 indicadores de dados e Score ≥58. O modelo não vai recomendar apostas com evidência insuficiente.${remaining}` : "Não foram encontrados jogos pré-jogo nas competições disponíveis.");
     renderizarJogos();
     renderizarDiagnostico();
   } catch (err) {
@@ -160,7 +161,7 @@ async function carregarMelhoresJogos(force = false) {
       status.innerHTML = `🛑 <b>API-Football atingiu o limite diário.</b><br><small>Pedidos restantes: ${guardData.remaining}/${guardData.limit}. ${quotaResetText()} O histórico e a calibração continuam disponíveis sem chamar a API.</small>`;
     } else {
       status.className = "games-status error-box";
-      status.innerHTML = `⚠️ ${escapeHtml(err.message)}<br><small>V1.4.27 usa football-data.org como fallback. Confirma a variável <b>FOOTBALL_DATA_API_KEY</b> nas Environment Variables da Vercel.</small>`;
+      status.innerHTML = `⚠️ ${escapeHtml(err.message)}<br><small>V1.4.28 usa football-data.org como fallback. Confirma a variável <b>FOOTBALL_DATA_API_KEY</b> nas Environment Variables da Vercel.</small>`;
     }
     renderizarHistorico();
     renderizarCalibracao();
@@ -191,7 +192,7 @@ function renderizarDiagnostico() {
   box.style.display = "block";
   box.innerHTML = `
     <div class="diagnostic-panel">
-      <div class="diagnostic-head"><div><b>🔎 Diagnóstico da API</b><small>Não altera o Score. Serve apenas para identificar onde os dados estão a faltar.</small></div><span class="diag-quota">Fonte: ${escapeHtml(d.provider || "—")} · Quota: ${quota}</span></div>
+      <div class="diagnostic-head"><div><b>🔎 Diagnóstico dos dados</b><small>Não altera o Score. Mostra cobertura dos dados e, no fallback, deixa claro o que não é fornecido pela fonte.</small></div><span class="diag-quota">Fonte: ${escapeHtml(d.provider || "—")} · Quota: ${quota}</span></div>
       <div class="diagnostic-summary">
         <span>Fixtures: <b>${d.fixtures?.results ?? "—"}</b></span>
         <span>Competições: <b>${d.competitions?.length ?? 0}</b></span>
@@ -201,7 +202,7 @@ function renderizarDiagnostico() {
         ${rows.map((c, idx) => {
           const e=c.endpointDiagnostics||{};
           return `<details ${idx===0 ? "open" : ""} class="diagnostic-game">
-            <summary><b>${escapeHtml(c.league || "Competição")}</b> · S${escapeHtml(String(c.season || "—"))} · ${escapeHtml(String(c.dataQuality || "—"))} · ${c.evidenceCount ?? 0}/6 sinais</summary>
+            <summary><b>${escapeHtml(c.league || "Competição")}</b> · S${escapeHtml(String(c.season || "—"))} · ${escapeHtml(String(c.dataQuality || "—"))} · ${c.evidenceCount ?? 0}/6 indicadores</summary>
             <div class="diag-grid">
               ${renderEndpoint("Leagues / season", e.leagues)}
               ${renderEndpoint("Standings", e.standings)}
@@ -456,7 +457,7 @@ function renderizarLaboratorio() {
   const gap=rate==null?null:rate-avg;
   const status=resolved.length>=5?"🟢 Amostra de teste suficiente":"🟡 Gere os dados de teste para começar";
   c.innerHTML=`<div class="lab-panel">
-    <div class="lab-head"><div><h3>🧪 Laboratório V1.4.27</h3><p>Ambiente isolado para testar Histórico, resultados e calibração <b>sem fazer pedidos às APIs externas</b>. Os dados daqui não entram no histórico real.</p></div><span class="lab-badge">🚫 API: 0 pedidos</span></div>
+    <div class="lab-head"><div><h3>🧪 Laboratório V1.4.28</h3><p>Ambiente isolado para testar Histórico, resultados e calibração <b>sem fazer pedidos às APIs externas</b>. Os dados daqui não entram no histórico real.</p></div><span class="lab-badge">🚫 API: 0 pedidos</span></div>
     <div class="lab-actions"><button class="btn-lab" onclick="gerarDadosLaboratorio()">🧪 Gerar 12 resultados de teste</button><button class="btn-lab-secondary" onclick="limparLaboratorio()">🗑 Limpar laboratório</button></div>
     <div class="history-summary"><div><strong>${laboratorioSugestoes.length}</strong><small>Dados de teste</small></div><div><strong>${resolved.length}</strong><small>Avaliados</small></div><div><strong>${rate==null?"—":rate+"%"}</strong><small>Acerto teste</small></div><div><strong>${gap==null?"—":(gap>0?"+":"")+gap+" pp"}</strong><small>Real − previsto</small></div></div>
     <div class="calibration-status"><b>${status}</b><span>${resolved.length?`Confiança média ${avg}% · ${gap==null?"—":`diferença ${gap>0?"+":""}${gap} pp`}`:"Nenhum resultado de teste criado."}</span></div>
@@ -517,7 +518,7 @@ function renderizarJogos() {
         ${alternatives.length ? `<div class="alternatives"><small>Outras leituras</small>${alternatives.map(s => `<div>• ${escapeHtml(s.label)} <b>${Math.round(s.confidence)}%</b></div>`).join("")}</div>` : ""}
       </div>
       <div class="card-footer">
-        <span class="data-note">${j.suggestion.market === "none" ? "⛔ Sem vantagem clara" : (j.dataQuality === "high" ? "✓ Dados fortes" : j.dataQuality === "medium" ? "✓ Dados razoáveis" : j.dataQuality === "low" ? "⚠ Dados limitados" : "⛔ Dados insuficientes")} · ${signalCount}/6 sinais</span>
+        <span class="data-note">${j.suggestion.market === "none" ? "⛔ Sem vantagem clara" : (j.dataQuality === "high" ? "✓ Dados fortes" : j.dataQuality === "medium" ? "✓ Dados razoáveis" : j.dataQuality === "low" ? "⚠ Dados limitados" : "⛔ Dados insuficientes")} · ${signalCount}/6 indicadores de dados${j.suggestion.support?.length ? ` · ${j.suggestion.support.length} suportes no mercado` : ""}</span>
         <div class="card-actions">
           <button class="btn-import" onclick="importarParaFormulario('${jsQuote(`${j.home} vs ${j.away} (${j.suggestion.label})`)}', 1)" ${j.suggestion.market === "none" ? "disabled" : ""}>⚡ Registar</button>
           <button class="btn-history" onclick="guardarSugestao('${jsQuote(j.id)}')" ${saved ? "disabled" : ""}>${saved ? "✓ Guardada" : "📚 Guardar"}</button>
