@@ -1,4 +1,4 @@
-# Painel Avançado Multibancas — V1.4.28
+# Painel Avançado Multibancas — V1.4.29
 
 V1.4.23 mantém o algoritmo e a calibração e acrescenta protecção da quota da API-Football.
 
@@ -47,7 +47,7 @@ A calibração usa apenas resultados reais do histórico. Com pelo menos 5 resul
 - Não altera a `APIFOOTBALL_KEY`; requer apenas `FOOTBALL_DATA_API_KEY`.
 
 
-## V1.4.28 — transparência do fallback
+## V1.4.29 — transparência do fallback
 
 - Mantém sem alterações o modelo estatístico e os critérios de selecção da V1.4.27.
 - Corrige a mensagem da interface: as oportunidades recomendáveis exigem pelo menos 4/6 indicadores de dados e Score mínimo 58.
@@ -56,3 +56,10 @@ A calibração usa apenas resultados reais do histórico. Com pelo menos 5 resul
 - Explica na área de análise que o fallback não fornece H2H/Predictions da API-Football e não os simula.
 - Actualiza a versão do Laboratório e o cache-busting do `app.js`.
 - Nenhuma alteração é feita ao Histórico, Calibração adaptativa, Gestor de Apostas, `APIFOOTBALL_KEY` ou `FOOTBALL_DATA_API_KEY`.
+
+
+## V1.4.29
+- Confiança conservadora no fallback football-data.org.
+- Score mantém a força do modelo; confiança e Score são conceitos separados.
+- A confiança não é apresentada como probabilidade garantida.
+- Mantida a calibração adaptativa apenas com resultados reais.
