@@ -23,3 +23,13 @@ V1.4.23 mantém o algoritmo e a calibração e acrescenta protecção da quota d
 
 ## V1.4.25 — calibração adaptativa do Score
 A calibração usa apenas resultados reais do histórico. Com pelo menos 5 resultados no mesmo mercado/faixa, o Score pode receber um ajuste progressivo baseado na diferença entre acerto real e confiança prevista, limitado para evitar oscilações. Antes da amostra mínima, o Score mantém-se inalterado. O Laboratório continua isolado e não alimenta a calibração real.
+
+
+## V1.4.26 — fallback de dados
+
+- Mantém API-Football como fonte principal quando disponível.
+- Se API-Football estiver indisponível/suspensa ou a quota local estiver protegida, usa `football-data.org` como fallback.
+- O fallback usa o endpoint `trends` com janela de 5 jogos para obter forma, médias de golos, pontos e tendências Over 1.5/2.5.
+- O Score e as sugestões continuam a ser calculados pelo painel, mas a indicação passa a ser apresentada como modelo estatístico de fallback e não como uma Prediction da API-Football.
+- Requer a variável Vercel `FOOTBALL_DATA_API_KEY` com a chave do football-data.org.
+- Não é necessário alterar a `APIFOOTBALL_KEY`.
