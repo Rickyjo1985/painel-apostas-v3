@@ -111,7 +111,7 @@ async function carregarMelhoresJogos(force = false) {
   const container = document.getElementById("games-container");
   const btn = document.getElementById("btn-refresh-games");
   const guard = getQuotaGuard();
-  // V1.4.26: se a API-Football estiver bloqueada/sem quota, tentamos o
+  // V1.4.27: se a API-Football estiver bloqueada/sem quota, tentamos o
   // fallback football-data.org em vez de deixar o painel sem jogos.
   status.className = "games-status loading";
   status.innerText = "A analisar os jogos reais de hoje…";
@@ -160,7 +160,7 @@ async function carregarMelhoresJogos(force = false) {
       status.innerHTML = `🛑 <b>API-Football atingiu o limite diário.</b><br><small>Pedidos restantes: ${guardData.remaining}/${guardData.limit}. ${quotaResetText()} O histórico e a calibração continuam disponíveis sem chamar a API.</small>`;
     } else {
       status.className = "games-status error-box";
-      status.innerHTML = `⚠️ ${escapeHtml(err.message)}<br><small>V1.4.26 usa football-data.org como fallback. Confirma a variável <b>FOOTBALL_DATA_API_KEY</b> nas Environment Variables da Vercel.</small>`;
+      status.innerHTML = `⚠️ ${escapeHtml(err.message)}<br><small>V1.4.27 usa football-data.org como fallback. Confirma a variável <b>FOOTBALL_DATA_API_KEY</b> nas Environment Variables da Vercel.</small>`;
     }
     renderizarHistorico();
     renderizarCalibracao();
@@ -456,7 +456,7 @@ function renderizarLaboratorio() {
   const gap=rate==null?null:rate-avg;
   const status=resolved.length>=5?"🟢 Amostra de teste suficiente":"🟡 Gere os dados de teste para começar";
   c.innerHTML=`<div class="lab-panel">
-    <div class="lab-head"><div><h3>🧪 Laboratório V1.4.26</h3><p>Ambiente isolado para testar Histórico, resultados e calibração <b>sem fazer pedidos às APIs externas</b>. Os dados daqui não entram no histórico real.</p></div><span class="lab-badge">🚫 API: 0 pedidos</span></div>
+    <div class="lab-head"><div><h3>🧪 Laboratório V1.4.27</h3><p>Ambiente isolado para testar Histórico, resultados e calibração <b>sem fazer pedidos às APIs externas</b>. Os dados daqui não entram no histórico real.</p></div><span class="lab-badge">🚫 API: 0 pedidos</span></div>
     <div class="lab-actions"><button class="btn-lab" onclick="gerarDadosLaboratorio()">🧪 Gerar 12 resultados de teste</button><button class="btn-lab-secondary" onclick="limparLaboratorio()">🗑 Limpar laboratório</button></div>
     <div class="history-summary"><div><strong>${laboratorioSugestoes.length}</strong><small>Dados de teste</small></div><div><strong>${resolved.length}</strong><small>Avaliados</small></div><div><strong>${rate==null?"—":rate+"%"}</strong><small>Acerto teste</small></div><div><strong>${gap==null?"—":(gap>0?"+":"")+gap+" pp"}</strong><small>Real − previsto</small></div></div>
     <div class="calibration-status"><b>${status}</b><span>${resolved.length?`Confiança média ${avg}% · ${gap==null?"—":`diferença ${gap>0?"+":""}${gap} pp`}`:"Nenhum resultado de teste criado."}</span></div>
@@ -505,7 +505,7 @@ function renderizarJogos() {
           <span>📈 Forma ${j.metrics?.form ?? "—"}</span>
           <span>⚽ +1.5 ${j.metrics?.goals ?? "—"}</span>
           <span>🤝 H2H ${j.metrics?.h2h ?? "—"}</span>
-          <span>🤖 API ${j.metrics?.prediction ?? "—"}</span>
+          <span>🧮 Modelo ${j.metrics?.prediction ?? "—"}</span>
           <span>🏆 Tabela ${j.metrics?.table ?? "—"}</span>
           <span>📡 ${escapeHtml(j.coverage?.label ?? "Cobertura básica")} · S${escapeHtml(String(j.coverage?.season ?? "—"))}</span>
         </div>
