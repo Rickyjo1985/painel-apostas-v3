@@ -420,6 +420,28 @@ function footballDataMarkets(x){
   void bttsSignals;
   return markets.sort((a,b)=>b.confidence-a.confidence).slice(0,4);
 }
+function adjustFallbackConfidence(rawConfidence, evidenceCount, supportCount, market){
+  // V1.4.29: confiança conservadora para o fallback. Os seis indicadores
+  // provêm do mesmo endpoint de tendências e não devem ser tratados como
+  // seis fontes independentes. O Score continua a medir força/concordância.
+  const e = Math.max(0, Math.min(6, Number(evidenceCount)||0));
+  const s = Math.max(0, Math.min(3, Number(supportCount)||0));
+  const evidenceFactor = e >= 6 ? 0.88 : e >= 5 ? 0.85 : 0.82;
+  const supportFactor = s >= 3 ? 1 : s === 2 ? 0.98 : 0.95;
+  const marketCap = market === "over15" ? 86 : market === "doubleHome" || market === "doubleAway" ? 84 : 82;
+  const adjusted = Math.round(clamp(Number(rawConfidence)||0) * evidenceFactor * supportFactor);
+  return Math.min(marketCap, adjusted);
+}
+
+function applyFallbackConfidence(markets, evidenceCount){
+  return markets.map(m=>({
+    ...m,
+    modelConfidence: Math.round(clamp(m.confidence)),
+    confidence: adjustFallbackConfidence(m.confidence, evidenceCount, m.support?.length||0, m.market),
+    confidenceMode: "conservadora-fallback"
+  }));
+}
+
 function footballDataReason(m,x){
   const bits=[];
   if(m.market.includes("Home")||m.market==="homeWin") bits.push(`Modelo: ${Math.round(x.probs.home)}% casa`);
@@ -434,7 +456,7 @@ function footballDataReason(m,x){
   return bits.slice(0,3).join("; ")||"Modelo estatístico de fallback com dados do football-data.org.";
 }
 async function loadFootballDataFallback(date,force=false){
-  const key=`football-data-v1427:${date}`;
+  const key=`football-data-v1429:${date}`;
   const raw=await cached(key,()=>footballDataFetch("/trends/",{date,window:5,competitions:FOOTBALL_DATA_COMPETITIONS.join(","),consider_side:"true"}),force,FOOTBALL_DATA_CACHE_TTL);
   const rows=Array.isArray(raw?.trends)?raw.trends:[];
   const out=[];
@@ -443,7 +465,7 @@ async function loadFootballDataFallback(date,force=false){
     const utc=row?.utcDate;
     if(status && !["scheduled","timed","postponed"].includes(status)) continue;
     if(!utc) continue;
-    const x=footballDataTrendPrediction(row), markets=footballDataMarkets(x), bestMarket=markets[0]||null;
+    const x=footballDataTrendPrediction(row);
     const evidenceSignals=[
       x.hForm!=null&&x.aForm!=null,
       x.hGF!=null&&x.aGF!=null,
@@ -453,8 +475,10 @@ async function loadFootballDataFallback(date,force=false){
       x.hO25!=null&&x.aO25!=null
     ]; 
     const evidence=evidenceSignals.filter(Boolean).length;
+    const markets=applyFallbackConfidence(footballDataMarkets(x), evidence);
+    const bestMarket=markets[0]||null;
     const score=bestMarket?Math.round(clamp(
-      0.58*bestMarket.confidence+
+      0.58*bestMarket.modelConfidence+
       0.22*(50+Math.min(40,evidence*8))+
       0.20*(50+Math.min(24,(bestMarket.support?.length||0)*8))
     )):0;
@@ -464,7 +488,7 @@ async function loadFootballDataFallback(date,force=false){
     const qualityLabel=quality(evidence);
     const time=new Intl.DateTimeFormat("pt-PT",{timeZone:"Europe/Lisbon",hour:"2-digit",minute:"2-digit"}).format(new Date(utc));
     out.push({
-      id:row.id||`${row.homeTeam?.id}-${row.awayTeam?.id}-${utc}`,home:row.homeTeam?.name||"Casa",away:row.awayTeam?.name||"Fora",league,time,kickoff:utc,score,suggestion,suggestions,dataQuality:qualityLabel,evidenceCount:evidence,
+      id:row.id||`${row.homeTeam?.id}-${row.awayTeam?.id}-${utc}`,home:row.homeTeam?.name||"Casa",away:row.awayTeam?.name||"Fora",league,time,kickoff:utc,score,suggestion,suggestions,dataQuality:qualityLabel,evidenceCount:evidence,confidenceModel:"fallback-conservador",
       provider:"football-data.org",coverage:{season:row.season?.id||null,predictions:false,label:"Fallback: football-data.org · trends 5 jogos"},
       dataPoints:{historyHome:x.hForm!=null?5:0,historyAway:x.aForm!=null?5:0,h2h:0,prediction:false,standingsHome:false,standingsAway:false},
       evidence:{homeGF:x.hGF,awayGF:x.aGF,homeBTTS:x.hBTTS,awayBTTS:x.aBTTS,homeOver15:x.hO15,awayOver15:x.aO15,homeOver25:x.hO25,awayOver25:x.aO25},
