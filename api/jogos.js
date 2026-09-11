@@ -321,7 +321,7 @@ function poissonPmf(k,lambda){
   return Math.exp(-lambda)*Math.pow(lambda,k)/fact;
 }
 function poissonMatchProbabilities(homeGoals,awayGoals){
-  const max=7;
+  const max=8;
   let home=0,draw=0,away=0,over15=0,over25=0,btts=0;
   for(let h=0;h<=max;h++) for(let a=0;a<=max;a++){
     const p=poissonPmf(h,homeGoals)*poissonPmf(a,awayGoals);
@@ -331,56 +331,93 @@ function poissonMatchProbabilities(homeGoals,awayGoals){
     if(h>0&&a>0) btts+=p;
   }
   const total=home+draw+away;
-  return {home:home/total*100,draw:draw/total*100,away:away/total*100,over15:over15*100,over25:over25*100,btts:btts*100};
+  return {home:home/total*100,draw:draw/total*100,away:away/total*100,over15:over15/total*100,over25:over25/total*100,btts:btts/total*100};
 }
 function trendFormScore(form){
-  const s=String(form||"").toUpperCase();
+  const s=String(form||"").toUpperCase().replace(/[^WDL]/g,"");
   if(!s) return null;
   const pts=[...s].map(x=>x==="W"?3:x==="D"?1:0);
   return pts.length?avg(pts)/3*100:null;
+}
+function trendPercent(v){
+  const n=num(v);
+  if(n==null) return null;
+  return n<=1 ? n*100 : n;
 }
 function footballDataTrendPrediction(row){
   const h=row?.trend?.home||{}, a=row?.trend?.away||{};
   const hGF=num(h.avg_goals_scored), hGA=num(h.avg_goals_conceded), aGF=num(a.avg_goals_scored), aGA=num(a.avg_goals_conceded);
   const hPts=num(h.avg_points), aPts=num(a.avg_points);
   const hForm=trendFormScore(h.form), aForm=trendFormScore(a.form);
-  const lambdaHome=clamp(((hGF??1.25)+(aGA??1.25))/2*1.08,0.2,4.5);
-  const lambdaAway=clamp(((aGF??1.10)+(hGA??1.25))/2,0.2,4.5);
-  let probs=poissonMatchProbabilities(lambdaHome,lambdaAway);
-  // Blend Poisson with recent points/form so a single goal average cannot dominate.
-  if(hPts!=null&&aPts!=null){
-    const totalPts=Math.max(0.01,hPts+aPts);
-    const hp=clamp(hPts/3*100), ap=clamp(aPts/3*100);
-    const strengthHome=clamp(50+(hp-ap)*0.28);
-    const strengthAway=clamp(50+(ap-hp)*0.28);
-    const normHome=Math.max(1,strengthHome), normAway=Math.max(1,strengthAway);
-    const scale=(probs.home+probs.away)/Math.max(1,normHome+normAway);
-    probs.home=probs.home*0.72+scale*normHome*0.28;
-    probs.away=probs.away*0.72+scale*normAway*0.28;
-    const total=probs.home+probs.draw+probs.away;
-    probs.home=probs.home/total*100; probs.draw=probs.draw/total*100; probs.away=probs.away/total*100;
-  }
-  const hist15=avg([num(h.pct_o_15),num(a.pct_o_15)].filter(v=>v!=null).map(v=>v*100));
-  const hist25=avg([num(h.pct_o_25),num(a.pct_o_25)].filter(v=>v!=null).map(v=>v*100));
-  const histBtts=avg([num(h.pct_bts),num(a.pct_bts)].filter(v=>v!=null).map(v=>v*100));
-  probs.over15=hist15!=null?0.65*hist15+0.35*probs.over15:probs.over15;
-  probs.over25=hist25!=null?0.65*hist25+0.35*probs.over25:probs.over25;
-  probs.btts=histBtts!=null?0.65*histBtts+0.35*probs.btts:probs.btts;
-  return {h,a,hGF,hGA,aGF,aGA,hPts,aPts,hForm,aForm,lambdaHome,lambdaAway,probs};
+  const hO15=trendPercent(h.pct_o_15), aO15=trendPercent(a.pct_o_15);
+  const hO25=trendPercent(h.pct_o_25), aO25=trendPercent(a.pct_o_25);
+  const hBTTS=trendPercent(h.pct_bts), aBTTS=trendPercent(a.pct_bts);
+
+  // The fallback uses only fields actually supplied by football-data.org.
+  // Attack/defence are weighted more than form, while form provides a controlled adjustment.
+  const baseHome=((hGF??1.25)*0.62+(aGA??1.25)*0.38)*1.08;
+  const baseAway=((aGF??1.10)*0.62+(hGA??1.25)*0.38);
+  const formDiff=(hForm!=null&&aForm!=null)?(hForm-aForm):0;
+  const pointsDiff=(hPts!=null&&aPts!=null)?(hPts-aPts)*10:0;
+  const strengthAdjust=clamp((formDiff*0.055+pointsDiff*0.10),-12,12)/100;
+  const lambdaHome=clamp(baseHome*(1+strengthAdjust),0.2,4.5);
+  const lambdaAway=clamp(baseAway*(1-strengthAdjust),0.2,4.5);
+  const poisson=poissonMatchProbabilities(lambdaHome,lambdaAway);
+
+  // Blend recent trend rates with the Poisson estimate instead of treating either as absolute truth.
+  const hist15=avg([hO15,aO15].filter(v=>v!=null));
+  const hist25=avg([hO25,aO25].filter(v=>v!=null));
+  const histBtts=avg([hBTTS,aBTTS].filter(v=>v!=null));
+  const over15=hist15!=null?0.60*hist15+0.40*poisson.over15:poisson.over15;
+  const over25=hist25!=null?0.60*hist25+0.40*poisson.over25:poisson.over25;
+  const btts=histBtts!=null?0.60*histBtts+0.40*poisson.btts:poisson.btts;
+
+  return {h,a,hGF,hGA,aGF,aGA,hPts,aPts,hForm,aForm,hO15,aO15,hO25,aO25,hBTTS,aBTTS,lambdaHome,lambdaAway,probs:{...poisson,over15,over25,btts}};
 }
 function footballDataMarkets(x){
   const p=x.probs, markets=[];
-  const formDiff=(x.hForm!=null&&x.aForm!=null)?x.hForm-x.aForm:0;
-  const ptsDiff=(x.hPts!=null&&x.aPts!=null)?(x.hPts-x.aPts)*20:0;
-  const goalDiff=(x.hGF!=null&&x.aGA!=null&&x.aGF!=null&&x.hGA!=null)?((x.hGF-x.aGA)-(x.aGF-x.hGA))*12:0;
-  const homeSignals=[formDiff>=6,ptsDiff>=5,goalDiff>=3].filter(Boolean).length;
-  const awaySignals=[formDiff<=-6,ptsDiff<=-5,goalDiff<=-3].filter(Boolean).length;
-  if(p.home+p.draw>=70 && (p.home>=48 || homeSignals>=1)) markets.push({market:"doubleHome",label:"Dupla possibilidade: casa ou empate",confidence:Math.round(clamp(p.home+p.draw+homeSignals*2)),support:homeSignals?["forma","força recente"].slice(0,homeSignals):["modelo de golos"]});
-  if(p.away+p.draw>=70 && (p.away>=48 || awaySignals>=1)) markets.push({market:"doubleAway",label:"Dupla possibilidade: fora ou empate",confidence:Math.round(clamp(p.away+p.draw+awaySignals*2)),support:awaySignals?["forma","força recente"].slice(0,awaySignals):["modelo de golos"]});
-  if(p.home>=57 && p.home-Math.max(p.away,p.draw)>=10 && homeSignals>=1) markets.push({market:"homeWin",label:"Vitória da equipa da casa",confidence:Math.round(clamp(p.home+homeSignals*2)),support:["forma","força recente"].slice(0,Math.max(1,homeSignals))});
-  if(p.away>=57 && p.away-Math.max(p.home,p.draw)>=10 && awaySignals>=1) markets.push({market:"awayWin",label:"Vitória da equipa visitante",confidence:Math.round(clamp(p.away+awaySignals*2)),support:["forma","força recente"].slice(0,Math.max(1,awaySignals))});
-  if(p.over15>=66) markets.push({market:"over15",label:"Mais de 1,5 golos",confidence:Math.round(clamp(p.over15)),support:["tendência de golos"]});
-  if(p.over25>=66) markets.push({market:"over25",label:"Mais de 2,5 golos",confidence:Math.round(clamp(p.over25)),support:["tendência de golos"]});
+  const formDiff=(x.hForm!=null&&x.aForm!=null)?x.hForm-x.aForm:null;
+  const pointsDiff=(x.hPts!=null&&x.aPts!=null)?x.hPts-x.aPts:null;
+  const attackDiff=(x.hGF!=null&&x.aGF!=null&&x.hGA!=null&&x.aGA!=null)
+    ? ((x.hGF-x.aGF)+(x.aGA-x.hGA))*10 : null;
+
+  const homeSignals=[
+    formDiff!=null&&formDiff>=6,
+    pointsDiff!=null&&pointsDiff>=0.25,
+    attackDiff!=null&&attackDiff>=3
+  ].filter(Boolean).length;
+  const awaySignals=[
+    formDiff!=null&&formDiff<=-6,
+    pointsDiff!=null&&pointsDiff<=-0.25,
+    attackDiff!=null&&attackDiff<=-3
+  ].filter(Boolean).length;
+
+  // Match-result markets need at least two independent directional signals.
+  if(p.home+p.draw>=70 && (p.home>=48 || homeSignals>=2) && homeSignals>=2){
+    markets.push({market:"doubleHome",label:"Dupla possibilidade: casa ou empate",confidence:Math.round(clamp(p.home+p.draw+homeSignals*2)),support:["forma","força recente","ataque/defesa"].slice(0,homeSignals)});
+  }
+  if(p.away+p.draw>=70 && (p.away>=48 || awaySignals>=2) && awaySignals>=2){
+    markets.push({market:"doubleAway",label:"Dupla possibilidade: fora ou empate",confidence:Math.round(clamp(p.away+p.draw+awaySignals*2)),support:["forma","força recente","ataque/defesa"].slice(0,awaySignals)});
+  }
+  if(p.home>=57 && p.home-Math.max(p.away,p.draw)>=10 && homeSignals>=2){
+    markets.push({market:"homeWin",label:"Vitória da equipa da casa",confidence:Math.round(clamp(p.home+homeSignals*2)),support:["forma","força recente","ataque/defesa"].slice(0,homeSignals)});
+  }
+  if(p.away>=57 && p.away-Math.max(p.home,p.draw)>=10 && awaySignals>=2){
+    markets.push({market:"awayWin",label:"Vitória da equipa visitante",confidence:Math.round(clamp(p.away+awaySignals*2)),support:["forma","força recente","ataque/defesa"].slice(0,awaySignals)});
+  }
+
+  // Goal markets require independent trend support, not just the Poisson output.
+  const o15Signals=[x.hO15,x.aO15].filter(v=>v!=null).filter(v=>v>=65).length;
+  const o25Signals=[x.hO25,x.aO25].filter(v=>v!=null).filter(v=>v>=58).length;
+  const bttsSignals=[x.hBTTS,x.aBTTS].filter(v=>v!=null).filter(v=>v>=58).length;
+  if(p.over15>=66 && o15Signals>=1){
+    markets.push({market:"over15",label:"Mais de 1,5 golos",confidence:Math.round(clamp(p.over15+o15Signals*2)),support:["tendência Over 1,5","modelo de golos"].slice(0,1+o15Signals)});
+  }
+  if(p.over25>=66 && o25Signals>=1){
+    markets.push({market:"over25",label:"Mais de 2,5 golos",confidence:Math.round(clamp(p.over25+o25Signals*2)),support:["tendência Over 2,5","modelo de golos"].slice(0,1+o25Signals)});
+  }
+  // BTTS is calculated for diagnostics/future use but deliberately not exposed as a new market in this version.
+  void bttsSignals;
   return markets.sort((a,b)=>b.confidence-a.confidence).slice(0,4);
 }
 function footballDataReason(m,x){
@@ -393,10 +430,11 @@ function footballDataReason(m,x){
   if(m.market==="over25") bits.push(`Over 2,5 estimado ${Math.round(x.probs.over25)}%`);
   if(x.hForm!=null&&x.aForm!=null) bits.push(`forma ${Math.round(x.hForm)}% vs ${Math.round(x.aForm)}%`);
   if(x.hGF!=null&&x.aGF!=null) bits.push(`golos médios ${x.hGF.toFixed(1)} vs ${x.aGF.toFixed(1)}`);
+  if(x.hO15!=null&&x.aO15!=null&&(m.market==="over15"||m.market==="over25")) bits.push(`Over 1,5 recente ${Math.round(x.hO15)}% / ${Math.round(x.aO15)}%`);
   return bits.slice(0,3).join("; ")||"Modelo estatístico de fallback com dados do football-data.org.";
 }
 async function loadFootballDataFallback(date,force=false){
-  const key=`football-data-v1426:${date}`;
+  const key=`football-data-v1427:${date}`;
   const raw=await cached(key,()=>footballDataFetch("/trends/",{date,window:5,competitions:FOOTBALL_DATA_COMPETITIONS.join(","),consider_side:"true"}),force,FOOTBALL_DATA_CACHE_TTL);
   const rows=Array.isArray(raw?.trends)?raw.trends:[];
   const out=[];
@@ -406,8 +444,20 @@ async function loadFootballDataFallback(date,force=false){
     if(status && !["scheduled","timed","postponed"].includes(status)) continue;
     if(!utc) continue;
     const x=footballDataTrendPrediction(row), markets=footballDataMarkets(x), bestMarket=markets[0]||null;
-    const evidence=[x.hForm!=null&&x.aForm!=null,x.hGF!=null&&x.aGF!=null,x.hGA!=null&&x.aGA!=null,x.hPts!=null&&x.aPts!=null,x.probs.over15!=null].filter(Boolean).length;
-    const score=bestMarket?Math.round(clamp(0.62*bestMarket.confidence+0.20*(50+Math.min(40,evidence*8))+0.18*(50+(bestMarket.support?.length||0)*8))):0;
+    const evidenceSignals=[
+      x.hForm!=null&&x.aForm!=null,
+      x.hGF!=null&&x.aGF!=null,
+      x.hGA!=null&&x.aGA!=null,
+      x.hPts!=null&&x.aPts!=null,
+      x.hO15!=null&&x.aO15!=null,
+      x.hO25!=null&&x.aO25!=null
+    ]; 
+    const evidence=evidenceSignals.filter(Boolean).length;
+    const score=bestMarket?Math.round(clamp(
+      0.58*bestMarket.confidence+
+      0.22*(50+Math.min(40,evidence*8))+
+      0.20*(50+Math.min(24,(bestMarket.support?.length||0)*8))
+    )):0;
     const league=row.competition?.name||"Outra competição";
     const suggestion=bestMarket?{...bestMarket,reason:footballDataReason(bestMarket,x)}:{market:"none",label:"Sem recomendação forte",confidence:0,support:[],reason:"Os sinais disponíveis não mostram vantagem estatística clara e concordante."};
     const suggestions=markets.map(m=>({...m,reason:footballDataReason(m,x)}));
@@ -416,13 +466,14 @@ async function loadFootballDataFallback(date,force=false){
     out.push({
       id:row.id||`${row.homeTeam?.id}-${row.awayTeam?.id}-${utc}`,home:row.homeTeam?.name||"Casa",away:row.awayTeam?.name||"Fora",league,time,kickoff:utc,score,suggestion,suggestions,dataQuality:qualityLabel,evidenceCount:evidence,
       provider:"football-data.org",coverage:{season:row.season?.id||null,predictions:false,label:"Fallback: football-data.org · trends 5 jogos"},
-      dataPoints:{historyHome:5,historyAway:5,h2h:0,prediction:false,standingsHome:false,standingsAway:false},
+      dataPoints:{historyHome:x.hForm!=null?5:0,historyAway:x.aForm!=null?5:0,h2h:0,prediction:false,standingsHome:false,standingsAway:false},
+      evidence:{homeGF:x.hGF,awayGF:x.aGF,homeBTTS:x.hBTTS,awayBTTS:x.aBTTS,homeOver15:x.hO15,awayOver15:x.aO15,homeOver25:x.hO25,awayOver25:x.aO25},
       endpointDiagnostics:{trends:{status:"OK",ok:true,results:1,reason:"trends: janela de 5 jogos"},predictions:{status:"não coberto",ok:false,results:0,reason:"não disponível neste fallback"},h2h:{status:"não coberto",ok:false,results:0,reason:"não disponível neste fallback"},standings:{status:"não testado",ok:false,results:0,reason:"não necessário para este fallback"},teamStatsHome:{status:"não coberto",ok:false,results:0,reason:"trends já fornece médias de ataque/defesa"},teamStatsAway:{status:"não coberto",ok:false,results:0,reason:"trends já fornece médias de ataque/defesa"}},
-      metrics:{form:`${x.hForm!=null?Math.round(x.hForm):"—"}% / ${x.aForm!=null?Math.round(x.aForm):"—"}%`,goals:`${x.lambdaHome.toFixed(1)} / ${x.lambdaAway.toFixed(1)}`,api:`${Math.round(x.probs.home)}% / ${Math.round(x.probs.draw)}% / ${Math.round(x.probs.away)}%`,table:"—",h2h:"—",comparison:`${x.hGF!=null?x.hGF.toFixed(1):"—"} / ${x.aGF!=null?x.aGF.toFixed(1):"—"} golos médios`}
+      metrics:{form:`${x.hForm!=null?Math.round(x.hForm):"—"}% / ${x.aForm!=null?Math.round(x.aForm):"—"}%`,goals:`${x.lambdaHome.toFixed(1)} / ${x.lambdaAway.toFixed(1)}`,api:`${Math.round(x.probs.home)}% / ${Math.round(x.probs.draw)}% / ${Math.round(x.probs.away)}%`,table:"—",h2h:"—",comparison:`${x.hGF!=null?x.hGF.toFixed(1):"—"} / ${x.aGF!=null?x.aGF.toFixed(1):"—"} golos médios`,model:"Poisson + tendências"}
     });
   }
   out.sort((a,b)=>(b.evidenceCount*10+b.score)-(a.evidenceCount*10+a.score));
-  const recommendable=out.filter(g=>g.evidenceCount>=3&&g.suggestion.market!=="none"&&g.score>=50);
+  const recommendable=out.filter(g=>g.evidenceCount>=4&&g.suggestion.market!=="none"&&g.score>=58);
   return {provider:"football-data.org",fixturesFound:rows.length,candidates:rows.length,analyzedCount:out.length,failures:0,recommendable:recommendable.length,games:recommendable.slice(0,TOP_LIMIT),all:out,diagnostics:{provider:"football-data.org",fallback:true,quotaRemaining:null,quotaLimit:null,fixtures:{ok:true,results:rows.length},competitions:out.slice(0,8).map(g=>({league:g.league,season:g.coverage.season,evidenceCount:g.evidenceCount,dataQuality:g.dataQuality,endpointDiagnostics:g.endpointDiagnostics})),optionalErrors:[]}};
 }
 
@@ -441,7 +492,7 @@ export default async function handler(req,res){
     if(useFallback){
       if(!String(process.env.FOOTBALL_DATA_API_KEY||"").trim()) throw new Error("FOOTBALL_DATA_API_KEY não está disponível neste deployment.");
       const result=await loadFootballDataFallback(date,force);
-      return res.status(200).json({ok:true,version:"1.4.26",provider:result.provider,date,dateLabel:labelDate(date),fixturesFound:result.fixturesFound,candidates:result.candidates,analyzed:result.analyzedCount,recommendable:result.recommendable,selected:result.games.length,games:result.games,diagnostics:result.diagnostics,cached:!force});
+      return res.status(200).json({ok:true,version:"1.4.27",provider:result.provider,date,dateLabel:labelDate(date),fixturesFound:result.fixturesFound,candidates:result.candidates,analyzed:result.analyzedCount,recommendable:result.recommendable,selected:result.games.length,games:result.games,diagnostics:result.diagnostics,cached:!force});
     }
     try{
       const result=await cached(`v1415:${date}`,async()=>{
@@ -474,12 +525,12 @@ export default async function handler(req,res){
         const recommendable=out.filter(g=>g.evidenceCount>=3&&g.suggestion.market!=="none"&&g.score>=50),games=recommendable.slice(0,TOP_LIMIT);
         return {provider:"API-Football",fixturesFound:fixtures.length,candidates:candidates.length,analyzedCount:out.length,failures:0,recommendable:recommendable.length,games,all:out,diagnostics};
       },force);
-      return res.status(200).json({ok:true,version:"1.4.26",provider:result.provider,date,dateLabel:labelDate(date),fixturesFound:result.fixturesFound,candidates:result.candidates,analyzed:result.analyzedCount,recommendable:result.recommendable,selected:result.games.length,games:result.games,diagnostics:result.diagnostics,cached:!force});
+      return res.status(200).json({ok:true,version:"1.4.27",provider:result.provider,date,dateLabel:labelDate(date),fixturesFound:result.fixturesFound,candidates:result.candidates,analyzed:result.analyzedCount,recommendable:result.recommendable,selected:result.games.length,games:result.games,diagnostics:result.diagnostics,cached:!force});
     }catch(primaryError){
       console.warn("API-Football indisponível; a usar fallback football-data.org:",primaryError?.message||primaryError);
       if(String(process.env.FOOTBALL_DATA_API_KEY||"").trim()){
         const result=await loadFootballDataFallback(date,force);
-        return res.status(200).json({ok:true,version:"1.4.26",provider:result.provider,fallbackFrom:"API-Football",date,dateLabel:labelDate(date),fixturesFound:result.fixturesFound,candidates:result.candidates,analyzed:result.analyzedCount,recommendable:result.recommendable,selected:result.games.length,games:result.games,diagnostics:{...result.diagnostics,primaryProvider:"API-Football",primaryError:primaryError?.message||"indisponível"},cached:!force});
+        return res.status(200).json({ok:true,version:"1.4.27",provider:result.provider,fallbackFrom:"API-Football",date,dateLabel:labelDate(date),fixturesFound:result.fixturesFound,candidates:result.candidates,analyzed:result.analyzedCount,recommendable:result.recommendable,selected:result.games.length,games:result.games,diagnostics:{...result.diagnostics,primaryProvider:"API-Football",primaryError:primaryError?.message||"indisponível"},cached:!force});
       }
       throw primaryError;
     }
