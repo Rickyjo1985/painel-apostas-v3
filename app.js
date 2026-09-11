@@ -148,7 +148,7 @@ async function carregarMelhoresJogos(force = false) {
     status.className = "games-status success";
     const remaining = Number.isFinite(quotaRemaining) ? ` · quota restante: ${quotaRemaining}` : "";
     status.innerText = baseJogos.length
-      ? `${data.provider === "football-data.org" ? "A API-Football está indisponível; o painel está a usar o fallback football-data.org. " : ""}Foram seleccionadas ${baseJogos.length} das melhores oportunidades. Critérios: pelo menos 4/6 indicadores de dados e Score ≥58. A confiança é uma estimativa estatística; o Score mede a força e a concordância dos sinais, não uma garantia de resultado.${remaining}`
+      ? `${data.provider === "football-data.org" ? "A API-Football está indisponível; o painel está a usar o fallback football-data.org. " : ""}Foram seleccionadas ${baseJogos.length} das melhores oportunidades. Critérios: pelo menos 4/6 indicadores de dados e Score ≥58. A confiança é uma estimativa conservadora do modelo; o Score mede a força e a concordância dos sinais, não uma probabilidade garantida de resultado.${remaining}`
       : ((data.analyzed || 0) > 0 ? `Foram analisados ${data.analyzed} jogos, mas nenhum reuniu os critérios mínimos: 4/6 indicadores de dados e Score ≥58. O modelo não vai recomendar apostas com evidência insuficiente.${remaining}` : "Não foram encontrados jogos pré-jogo nas competições disponíveis.");
     renderizarJogos();
     renderizarDiagnostico();
@@ -161,7 +161,7 @@ async function carregarMelhoresJogos(force = false) {
       status.innerHTML = `🛑 <b>API-Football atingiu o limite diário.</b><br><small>Pedidos restantes: ${guardData.remaining}/${guardData.limit}. ${quotaResetText()} O histórico e a calibração continuam disponíveis sem chamar a API.</small>`;
     } else {
       status.className = "games-status error-box";
-      status.innerHTML = `⚠️ ${escapeHtml(err.message)}<br><small>V1.4.28 usa football-data.org como fallback. Confirma a variável <b>FOOTBALL_DATA_API_KEY</b> nas Environment Variables da Vercel.</small>`;
+      status.innerHTML = `⚠️ ${escapeHtml(err.message)}<br><small>V1.4.29 usa football-data.org como fallback. Confirma a variável <b>FOOTBALL_DATA_API_KEY</b> nas Environment Variables da Vercel.</small>`;
     }
     renderizarHistorico();
     renderizarCalibracao();
@@ -457,7 +457,7 @@ function renderizarLaboratorio() {
   const gap=rate==null?null:rate-avg;
   const status=resolved.length>=5?"🟢 Amostra de teste suficiente":"🟡 Gere os dados de teste para começar";
   c.innerHTML=`<div class="lab-panel">
-    <div class="lab-head"><div><h3>🧪 Laboratório V1.4.28</h3><p>Ambiente isolado para testar Histórico, resultados e calibração <b>sem fazer pedidos às APIs externas</b>. Os dados daqui não entram no histórico real.</p></div><span class="lab-badge">🚫 API: 0 pedidos</span></div>
+    <div class="lab-head"><div><h3>🧪 Laboratório V1.4.29</h3><p>Ambiente isolado para testar Histórico, resultados e calibração <b>sem fazer pedidos às APIs externas</b>. Os dados daqui não entram no histórico real.</p></div><span class="lab-badge">🚫 API: 0 pedidos</span></div>
     <div class="lab-actions"><button class="btn-lab" onclick="gerarDadosLaboratorio()">🧪 Gerar 12 resultados de teste</button><button class="btn-lab-secondary" onclick="limparLaboratorio()">🗑 Limpar laboratório</button></div>
     <div class="history-summary"><div><strong>${laboratorioSugestoes.length}</strong><small>Dados de teste</small></div><div><strong>${resolved.length}</strong><small>Avaliados</small></div><div><strong>${rate==null?"—":rate+"%"}</strong><small>Acerto teste</small></div><div><strong>${gap==null?"—":(gap>0?"+":"")+gap+" pp"}</strong><small>Real − previsto</small></div></div>
     <div class="calibration-status"><b>${status}</b><span>${resolved.length?`Confiança média ${avg}% · ${gap==null?"—":`diferença ${gap>0?"+":""}${gap} pp`}`:"Nenhum resultado de teste criado."}</span></div>
@@ -473,7 +473,7 @@ function renderizarJogos() {
   baseJogos.forEach((j, index) => {
     const n = nivelScore(j.score);
     const confidence = Math.round(Math.min(95, Math.max(0, j.suggestion.confidence)));
-    const confidenceLabel = j.suggestion.market === "none" ? "Força da evidência" : "Confiança estimada";
+    const confidenceLabel = j.suggestion.market === "none" ? "Força da evidência" : (j.provider === "football-data.org" ? "Confiança conservadora do modelo" : "Confiança estimada");
     const alternatives = (j.suggestions || []).filter(s => s.market !== j.suggestion.market).slice(0,2);
     const saved = historicoSugestoes.some(x => String(x.id) === String(j.id));
     const derivedEvidence = [
@@ -497,6 +497,7 @@ function renderizarJogos() {
         <div class="game-title">${escapeHtml(j.home)} <span>vs</span> ${escapeHtml(j.away)}</div>
         <div class="confidence-line"><span>${confidenceLabel}</span><strong>${confidence}%</strong></div>
         <div class="confidence-bar"><span style="width:${Math.min(confidence,100)}%"></span></div>
+        ${j.provider === "football-data.org" ? `<div class="confidence-disclaimer">ℹ️ Estimativa conservadora do modelo; não representa probabilidade garantida de acerto.</div>` : ""}
         <div class="suggestion-box">
           <small>${j.suggestion.market === "none" ? "🧭 Decisão do modelo" : "🎯 Sugestão principal"}</small>
           <div class="main-suggestion">${escapeHtml(j.suggestion.label)}</div>
