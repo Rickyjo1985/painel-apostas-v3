@@ -1,6 +1,12 @@
 const PSW = "Rickyjo1985";
 let apostas = JSON.parse(localStorage.getItem('banca_data')) || [];
 let fltCasa = "todas", idEdicao = null, baseJogos = [], ultimoDiagnostico = null;
+let activeGamesProvider = "API-Football";
+const jogosPorFonte = {"API-Football": null, "football-data.org": null};
+const diagnosticosPorFonte = {"API-Football": null, "football-data.org": null};
+const dadosCabecalhoPorFonte = {"API-Football": null, "football-data.org": null};
+const estadoPorFonte = {"API-Football": null, "football-data.org": null};
+const fontesEmCarregamento = new Set();
 
 const MIN_SCORE = 50;
 const TOP_LIMIT = 5;
@@ -68,7 +74,44 @@ function mudarSeparador(tab) {
   document.getElementById(`tab-${tab}`).classList.add("active");
   document.getElementById("view-gestor").style.display = tab === 'gestor' ? "block" : "none";
   document.getElementById("view-jogos").style.display = tab === 'jogos' ? "block" : "none";
-  if (tab === 'jogos' && !baseJogos.length) carregarMelhoresJogos();
+  if (tab === 'jogos' && jogosPorFonte[activeGamesProvider] === null) carregarMelhoresJogos(false, activeGamesProvider);
+}
+
+function mudarFonteJogos(provider) {
+  if (!Object.prototype.hasOwnProperty.call(jogosPorFonte, provider)) return;
+  activeGamesProvider = provider;
+  document.querySelectorAll(".provider-tab").forEach(button => {
+    const active = button.id === (provider === "API-Football" ? "provider-tab-api-football" : "provider-tab-football-data");
+    button.classList.toggle("active", active);
+    button.setAttribute("aria-selected", active ? "true" : "false");
+  });
+
+  if (jogosPorFonte[provider] === null) {
+    baseJogos = [];
+    ultimoDiagnostico = null;
+    document.getElementById("games-date").innerText = `A consultar exclusivamente ${provider}…`;
+    const status = document.getElementById("games-status");
+    status.className = "games-status loading";
+    status.innerText = `A carregar jogos da fonte ${provider}…`;
+    renderizarDiagnostico();
+    renderizarJogos();
+    carregarMelhoresJogos(false, provider);
+    return;
+  }
+
+  baseJogos = calibrarJogos(jogosPorFonte[provider] || []);
+  jogosPorFonte[provider] = baseJogos;
+  ultimoDiagnostico = diagnosticosPorFonte[provider] || null;
+  const header = dadosCabecalhoPorFonte[provider];
+  const state = estadoPorFonte[provider];
+  document.getElementById("games-date").innerText = header || `Fonte seleccionada: ${provider}`;
+  const status = document.getElementById("games-status");
+  status.className = state?.className || "games-status";
+  status.innerText = state?.text || `Fonte independente: ${provider}.`;
+  renderizarDiagnostico();
+  renderizarJogos();
+  const btn = document.getElementById("btn-refresh-games");
+  if (btn) btn.disabled = fontesEmCarregamento.has(activeGamesProvider);
 }
 
 function alternarTipoAposta(t) {
@@ -106,22 +149,21 @@ function adicionarAposta(e) {
   document.getElementById("bet-form").reset(); alternarTipoAposta('simples'); atualizarPainel();
 }
 
-async function carregarMelhoresJogos(force = false) {
+async function carregarMelhoresJogos(force = false, provider = activeGamesProvider) {
+  const sourceProvider = provider === "football-data.org" ? "football-data.org" : "API-Football";
   const status = document.getElementById("games-status");
-  const container = document.getElementById("games-container");
   const btn = document.getElementById("btn-refresh-games");
-  const guard = getQuotaGuard();
-  // V1.4.28: mantém o fallback V1.4.27 e alinha a comunicação da interface com os critérios reais.
-  // V1.4.27: se a API-Football estiver bloqueada/sem quota, tentamos o
-  // fallback football-data.org em vez de deixar o painel sem jogos.
-  status.className = "games-status loading";
-  status.innerText = "A analisar os jogos reais de hoje…";
-  container.innerHTML = "";
-  if (btn) btn.disabled = true;
+  fontesEmCarregamento.add(sourceProvider);
+  if (sourceProvider === activeGamesProvider) {
+    status.className = "games-status loading";
+    status.innerText = `A consultar exclusivamente ${sourceProvider}…`;
+    if (btn) btn.disabled = true;
+  }
+
   try {
     const params = new URLSearchParams();
+    params.set("provider", sourceProvider === "football-data.org" ? "football-data" : "api-football");
     if (force) params.set("force", "1");
-    if (guard) params.set("provider", "football-data");
     const q = params.toString() ? `?${params.toString()}` : "";
     const response = await fetch(`/api/jogos${q}`, { cache: "no-store" });
     const raw = await response.text();
@@ -131,45 +173,71 @@ async function carregarMelhoresJogos(force = false) {
     } catch {
       const short = String(raw || "Resposta vazia do servidor.")
         .replace(/<[^>]*>/g, " ")
-        .replace(/\\s+/g, " ")
+        .replace(/\s+/g, " ")
         .trim()
         .slice(0, 240);
       throw new Error(`O servidor não devolveu JSON. ${short}`);
     }
-    if (!response.ok) throw new Error(data.error || "Não foi possível obter os jogos.");
-    ultimoDiagnostico = data.diagnostics || null;
-    baseJogos = calibrarJogos(data.games || []);
-    const providerLabel = data.provider === "football-data.org" ? "Fonte: football-data.org" : "Fonte: API-Football";
-    document.getElementById("games-date").innerText = `${data.dateLabel || "Hoje"} · ${data.analyzed || 0} jogos analisados · ${data.selected ?? (data.games || []).length} melhores opções · ${providerLabel}`;
+    if (!response.ok) throw new Error(data.error || `Não foi possível obter dados de ${sourceProvider}.`);
+    if (data.provider !== sourceProvider) {
+      throw new Error(`A fonte devolvida (${data.provider || "desconhecida"}) não corresponde à fonte seleccionada (${sourceProvider}). Os resultados foram recusados para evitar misturar APIs.`);
+    }
+
+    const calibratedGames = calibrarJogos(data.games || []);
+    jogosPorFonte[sourceProvider] = calibratedGames;
+    diagnosticosPorFonte[sourceProvider] = data.diagnostics || null;
+    dadosCabecalhoPorFonte[sourceProvider] = `${data.dateLabel || "Hoje"} · ${data.analyzed || 0} jogos analisados · ${data.selected ?? (data.games || []).length} melhores opções · Fonte exclusiva: ${sourceProvider}`;
+
     const quotaRemaining = Number(data.diagnostics?.quotaRemaining);
     const quotaLimit = Number(data.diagnostics?.quotaLimit) || QUOTA_LIMIT_DEFAULT;
-    if (Number.isFinite(quotaRemaining) && quotaRemaining <= 0) setQuotaGuard(0, quotaLimit, "quota diária esgotada");
-    else clearQuotaGuard();
-    status.className = "games-status success";
-    const remaining = Number.isFinite(quotaRemaining) ? ` · quota restante: ${quotaRemaining}` : "";
-    status.innerText = baseJogos.length
-      ? `${data.provider === "football-data.org" ? "A API-Football está indisponível; o painel está a usar o fallback football-data.org. " : ""}Foram seleccionadas ${baseJogos.length} das melhores oportunidades. Critérios: pelo menos 4/6 indicadores de dados e Score ≥58. A confiança é uma estimativa conservadora do modelo; o Score mede a força e a concordância dos sinais, não uma probabilidade garantida de resultado.${remaining}`
-      : ((data.analyzed || 0) > 0 ? `Foram analisados ${data.analyzed} jogos, mas nenhum reuniu os critérios mínimos: 4/6 indicadores de dados e Score ≥58. O modelo não vai recomendar apostas com evidência insuficiente.${remaining}` : "Não foram encontrados jogos pré-jogo nas competições disponíveis.");
-    renderizarJogos();
-    renderizarDiagnostico();
+    if (sourceProvider === "API-Football") {
+      if (Number.isFinite(quotaRemaining) && quotaRemaining <= 0) setQuotaGuard(0, quotaLimit, "quota diária esgotada");
+      else if (Number.isFinite(quotaRemaining) && quotaRemaining > 0) clearQuotaGuard();
+    }
+
+    const statusText = calibratedGames.length
+      ? `Foram seleccionadas ${calibratedGames.length} oportunidades calculadas exclusivamente a partir de ${sourceProvider}. Critérios: Score e indicadores de dados da fonte seleccionada. A confiança é uma estimativa do modelo, não uma probabilidade garantida.${sourceProvider === "API-Football" && Number.isFinite(quotaRemaining) ? ` Quota restante: ${quotaRemaining}.` : ""}`
+      : `${data.analyzed || 0} jogos analisados em ${sourceProvider}, mas nenhum reuniu os critérios mínimos de recomendação. Não serão substituídos por jogos da outra API.`;
+    estadoPorFonte[sourceProvider] = {className:"games-status success", text:statusText};
+
+    if (activeGamesProvider === sourceProvider) {
+      baseJogos = calibratedGames;
+      ultimoDiagnostico = diagnosticosPorFonte[sourceProvider];
+      document.getElementById("games-date").innerText = dadosCabecalhoPorFonte[sourceProvider];
+      status.className = estadoPorFonte[sourceProvider].className;
+      status.innerText = estadoPorFonte[sourceProvider].text;
+      renderizarJogos();
+      renderizarDiagnostico();
+    }
   } catch (err) {
     console.error(err);
-    baseJogos = [];
-    if (isDailyQuotaError(err.message)) {
-      const guardData = setQuotaGuard(err.remaining ?? 0, err.limit ?? QUOTA_LIMIT_DEFAULT, "quota diária atingida");
-      status.className = "games-status quota-box";
-      status.innerHTML = `🛑 <b>API-Football atingiu o limite diário.</b><br><small>Pedidos restantes: ${guardData.remaining}/${guardData.limit}. ${quotaResetText()} O histórico e a calibração continuam disponíveis sem chamar a API.</small>`;
-    } else {
-      status.className = "games-status error-box";
-      status.innerHTML = `⚠️ ${escapeHtml(err.message)}<br><small>V1.4.29 usa football-data.org como fallback. Confirma a variável <b>FOOTBALL_DATA_API_KEY</b> nas Environment Variables da Vercel.</small>`;
+    jogosPorFonte[sourceProvider] = [];
+    diagnosticosPorFonte[sourceProvider] = null;
+    dadosCabecalhoPorFonte[sourceProvider] = `Fonte exclusiva: ${sourceProvider} · Sem dados`;
+    let className = "games-status error-box";
+    let text = `Falha ao consultar ${sourceProvider}: ${err.message}. A outra API não será usada como substituta neste separador.`;
+    if (sourceProvider === "API-Football" && isDailyQuotaError(err.message)) {
+      const guardData = setQuotaGuard(0, QUOTA_LIMIT_DEFAULT, "quota diária atingida");
+      className = "games-status quota-box";
+      text = `API-Football atingiu o limite diário. Pedidos restantes: ${guardData.remaining}/${guardData.limit}. O separador Football-Data continua disponível de forma independente.`;
     }
-    renderizarHistorico();
-    renderizarCalibracao();
+    estadoPorFonte[sourceProvider] = {className, text};
+    if (activeGamesProvider === sourceProvider) {
+      baseJogos = [];
+      ultimoDiagnostico = null;
+      document.getElementById("games-date").innerText = dadosCabecalhoPorFonte[sourceProvider];
+      status.className = className;
+      status.innerText = text;
+      renderizarJogos();
+      renderizarDiagnostico();
+      renderizarHistorico();
+      renderizarCalibracao();
+    }
   } finally {
-    if (btn && !getQuotaGuard()) { btn.disabled = false; btn.title = "Actualizar jogos e análise"; }
+    fontesEmCarregamento.delete(sourceProvider);
+    if (btn && activeGamesProvider === sourceProvider) btn.disabled = fontesEmCarregamento.has(activeGamesProvider);
   }
 }
-
 function diagIcon(status) {
   if (status === "OK") return "🟢";
   if (status === "vazio") return "🟡";
@@ -344,12 +412,13 @@ function calibrarJogos(games) {
 function guardarSugestao(id) {
   const j = baseJogos.find(x => String(x.id) === String(id));
   if (!j) return;
-  if (historicoSugestoes.some(x => String(x.id) === String(id))) {
+  if (historicoSugestoes.some(x => String(x.id) === String(id) && (!x.provider || x.provider === (j.provider || activeGamesProvider)))) {
     alert("Esta sugestão já está no histórico.");
     return;
   }
   historicoSugestoes.unshift({
     id:j.id, date:j.kickoff?.slice(0,10) || new Date().toISOString().slice(0,10),
+    provider:j.provider || activeGamesProvider,
     kickoff:j.kickoff, home:j.home, away:j.away, league:j.league,
     market:j.suggestion.market, label:j.suggestion.label, reason:j.suggestion.reason,
     confidence:j.suggestion.confidence, rawConfidence:j.rawConfidence ?? j.suggestion.confidence,
