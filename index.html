@@ -103,9 +103,13 @@
         <button class="btn-filter" id="history-tab-laboratorio" onclick="mostrarSubAbaJogos('laboratorio')">🧪 Laboratório</button>
       </div>
 
-      <div id="games-status" class="games-status">A preparar análise…</div>
-      <div id="games-diagnostics" style="display:none;"></div>
       <div id="games-opportunities">
+        <div class="provider-toolbar" role="tablist" aria-label="Fonte dos dados dos jogos">
+          <button type="button" class="btn-filter provider-tab active" id="provider-tab-api-football" role="tab" aria-selected="true" onclick="mudarFonteJogos('API-Football')">⚽ API-Football</button>
+          <button type="button" class="btn-filter provider-tab" id="provider-tab-football-data" role="tab" aria-selected="false" onclick="mudarFonteJogos('football-data.org')">📊 Football-Data</button>
+        </div>
+        <div id="games-status" class="games-status">A preparar análise…</div>
+        <div id="games-diagnostics" style="display:none;"></div>
         <div class="games-grid" id="games-container"></div>
       </div>
       <div id="games-history" style="display:none;"></div>
@@ -130,6 +134,6 @@
     </div>
   </div>
 
-  <script src="app.js?v=74"></script>
+  <script src="app.js?v=75"></script>
 </body>
 </html>
