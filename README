@@ -63,3 +63,13 @@ A calibração usa apenas resultados reais do histórico. Com pelo menos 5 resul
 - Score mantém a força do modelo; confiança e Score são conceitos separados.
 - A confiança não é apresentada como probabilidade garantida.
 - Mantida a calibração adaptativa apenas com resultados reais.
+
+
+## V1.4.30 — separadores independentes por API
+
+- Adiciona dois separadores de oportunidades: API-Football e Football-Data.
+- Cada separador chama explicitamente a sua fonte e mantém resultados, diagnóstico e estado de carregamento separados.
+- O endpoint valida a fonte pedida; erros da API seleccionada não acionam substituição silenciosa pela outra API.
+- A rota antiga, sem o parâmetro `provider`, mantém o comportamento anterior para compatibilidade.
+- O histórico e a calibração existentes são preservados. Novas sugestões guardam a identificação da fonte de origem.
+- Não altera as chaves da Vercel nem o algoritmo de Score/confiança da V1.4.29.
