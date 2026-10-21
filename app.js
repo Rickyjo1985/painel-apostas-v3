@@ -3,6 +3,7 @@ let apostas = JSON.parse(localStorage.getItem('banca_data')) || [];
 let fltCasa = "todas", idEdicao = null, baseJogos = [], ultimoDiagnostico = null;
 let activeGamesProvider = "API-Football";
 const jogosPorFonte = {"API-Football": null, "football-data.org": null};
+const jogosBrutosPorFonte = {"API-Football": null, "football-data.org": null};
 const diagnosticosPorFonte = {"API-Football": null, "football-data.org": null};
 const dadosCabecalhoPorFonte = {"API-Football": null, "football-data.org": null};
 const estadoPorFonte = {"API-Football": null, "football-data.org": null};
@@ -99,7 +100,7 @@ function mudarFonteJogos(provider) {
     return;
   }
 
-  baseJogos = calibrarJogos(jogosPorFonte[provider] || []);
+  baseJogos = calibrarJogos(jogosBrutosPorFonte[provider] || []);
   jogosPorFonte[provider] = baseJogos;
   ultimoDiagnostico = diagnosticosPorFonte[provider] || null;
   const header = dadosCabecalhoPorFonte[provider];
@@ -183,7 +184,9 @@ async function carregarMelhoresJogos(force = false, provider = activeGamesProvid
       throw new Error(`A fonte devolvida (${data.provider || "desconhecida"}) não corresponde à fonte seleccionada (${sourceProvider}). Os resultados foram recusados para evitar misturar APIs.`);
     }
 
-    const calibratedGames = calibrarJogos(data.games || []);
+    const rawGames = data.games || [];
+    jogosBrutosPorFonte[sourceProvider] = rawGames;
+    const calibratedGames = calibrarJogos(rawGames);
     jogosPorFonte[sourceProvider] = calibratedGames;
     diagnosticosPorFonte[sourceProvider] = data.diagnostics || null;
     dadosCabecalhoPorFonte[sourceProvider] = `${data.dateLabel || "Hoje"} · ${data.analyzed || 0} jogos analisados · ${data.selected ?? (data.games || []).length} melhores opções · Fonte exclusiva: ${sourceProvider}`;
@@ -211,6 +214,7 @@ async function carregarMelhoresJogos(force = false, provider = activeGamesProvid
     }
   } catch (err) {
     console.error(err);
+    jogosBrutosPorFonte[sourceProvider] = [];
     jogosPorFonte[sourceProvider] = [];
     diagnosticosPorFonte[sourceProvider] = null;
     dadosCabecalhoPorFonte[sourceProvider] = `Fonte exclusiva: ${sourceProvider} · Sem dados`;
@@ -437,7 +441,8 @@ function atualizarResultado(id, resultado) {
   localStorage.setItem(HIST_KEY, JSON.stringify(historicoSugestoes));
   renderizarHistorico();
   renderizarCalibracao();
-  baseJogos = calibrarJogos(baseJogos);
+  baseJogos = calibrarJogos(jogosBrutosPorFonte[activeGamesProvider] || []);
+  jogosPorFonte[activeGamesProvider] = baseJogos;
   renderizarJogos();
 }
 
@@ -446,7 +451,8 @@ function reabrirResultado(id) {
   localStorage.setItem(HIST_KEY, JSON.stringify(historicoSugestoes));
   renderizarHistorico();
   renderizarCalibracao();
-  baseJogos = calibrarJogos(baseJogos);
+  baseJogos = calibrarJogos(jogosBrutosPorFonte[activeGamesProvider] || []);
+  jogosPorFonte[activeGamesProvider] = baseJogos;
   renderizarJogos();
 }
 
