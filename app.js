@@ -302,8 +302,8 @@ function nivelScore(score) {
 
 function resultadoBinario(x) { return x.resultado === "ganha" ? 1 : 0; }
 
-function historicoMercado(market) {
-  const rows = historicoSugestoes.filter(x => x.market === market && x.resultado !== "pendente");
+function historicoMercado(market, provider) {
+  const rows = historicoSugestoes.filter(x => x.market === market && x.provider === provider && x.resultado !== "pendente");
   const wins = rows.filter(x => x.resultado === "ganha").length;
   const avgConfidence = rows.length
     ? rows.reduce((sum, x) => sum + clamp(x.confidence ?? x.rawConfidence ?? 50), 0) / rows.length
@@ -333,10 +333,11 @@ function faixaScore(score) {
   return "<50";
 }
 
-function historicoFaixa(market, score) {
+function historicoFaixa(market, score, provider) {
   const faixa = faixaScore(score);
   const rows = historicoSugestoes.filter(x =>
     x.market === market &&
+    x.provider === provider &&
     (x.scoreBucket || faixaScore(x.score)) === faixa &&
     x.resultado !== "pendente"
   );
@@ -354,9 +355,9 @@ function historicoFaixa(market, score) {
   };
 }
 
-function calibrarConfianca(raw, market, score) {
-  const h = historicoMercado(market);
-  const hb = historicoFaixa(market, score);
+function calibrarConfianca(raw, market, score, provider = activeGamesProvider) {
+  const h = historicoMercado(market, provider);
+  const hb = historicoFaixa(market, score, provider);
   let confidence = Math.round(clamp(raw));
   let source = "inicial";
   let sample = 0;
@@ -401,7 +402,7 @@ function calibrarScore(rawScore, calibration) {
 function calibrarJogos(games) {
   return (games || []).map(j => {
     const rawScore = j.rawScore ?? j.score;
-    const c = calibrarConfianca(j.suggestion.confidence, j.suggestion.market, rawScore);
+    const c = calibrarConfianca(j.suggestion.confidence, j.suggestion.market, rawScore, j.provider || activeGamesProvider);
     const calibratedScore = j.suggestion.market === "none" ? 0 : calibrarScore(rawScore, c);
     return {
       ...j,
@@ -416,7 +417,7 @@ function calibrarJogos(games) {
 function guardarSugestao(id) {
   const j = baseJogos.find(x => String(x.id) === String(id));
   if (!j) return;
-  if (historicoSugestoes.some(x => String(x.id) === String(id) && (!x.provider || x.provider === (j.provider || activeGamesProvider)))) {
+  if (historicoSugestoes.some(x => String(x.id) === String(id) && x.provider === (j.provider || activeGamesProvider))) {
     alert("Esta sugestão já está no histórico.");
     return;
   }
@@ -436,8 +437,12 @@ function guardarSugestao(id) {
   alert("Sugestão guardada no histórico.");
 }
 
-function atualizarResultado(id, resultado) {
-  historicoSugestoes = historicoSugestoes.map(x => String(x.id) === String(id) ? {...x, resultado, resolvedAt:new Date().toISOString()} : x);
+function chaveHistorico(x) {
+  return `${x.provider || "sem-fonte"}::${String(x.id)}`;
+}
+
+function atualizarResultado(key, resultado) {
+  historicoSugestoes = historicoSugestoes.map(x => chaveHistorico(x) === String(key) ? {...x, resultado, resolvedAt:new Date().toISOString()} : x);
   localStorage.setItem(HIST_KEY, JSON.stringify(historicoSugestoes));
   renderizarHistorico();
   renderizarCalibracao();
@@ -446,8 +451,8 @@ function atualizarResultado(id, resultado) {
   renderizarJogos();
 }
 
-function reabrirResultado(id) {
-  historicoSugestoes = historicoSugestoes.map(x => String(x.id) === String(id) ? {...x, resultado:"pendente", resolvedAt:null} : x);
+function reabrirResultado(key) {
+  historicoSugestoes = historicoSugestoes.map(x => chaveHistorico(x) === String(key) ? {...x, resultado:"pendente", resolvedAt:null} : x);
   localStorage.setItem(HIST_KEY, JSON.stringify(historicoSugestoes));
   renderizarHistorico();
   renderizarCalibracao();
@@ -456,8 +461,8 @@ function reabrirResultado(id) {
   renderizarJogos();
 }
 
-function removerHistorico(id) {
-  historicoSugestoes = historicoSugestoes.filter(x => String(x.id) !== String(id));
+function removerHistorico(key) {
+  historicoSugestoes = historicoSugestoes.filter(x => chaveHistorico(x) !== String(key));
   localStorage.setItem(HIST_KEY, JSON.stringify(historicoSugestoes));
   renderizarHistorico();
   renderizarCalibracao();
@@ -625,13 +630,14 @@ function renderizarHistorico() {
           <div>
             <b>${escapeHtml(x.home)} vs ${escapeHtml(x.away)}</b>
             <small>${escapeHtml(x.league)} · ${escapeHtml(x.label)} · Score ${x.score} · Confiança ${x.confidence}% · Faixa ${escapeHtml(x.scoreBucket || faixaScore(x.score))}</small>
+            <small>Fonte: ${x.provider === "API-Football" ? "API-Football" : x.provider === "football-data.org" ? "Football-Data" : "Histórico antigo — fonte não registada"}</small>
             <small>Guardada: ${new Date(x.savedAt).toLocaleDateString("pt-PT")}${x.resolvedAt ? ` · Resultado: ${new Date(x.resolvedAt).toLocaleDateString("pt-PT")}` : ""}</small>
           </div>
           <div class="history-actions">
-            <button class="result-btn ${x.resultado==="ganha"?"selected":""}" onclick="atualizarResultado('${jsQuote(x.id)}','ganha')">✓ Ganha</button>
-            <button class="result-btn ${x.resultado==="perdida"?"selected":""}" onclick="atualizarResultado('${jsQuote(x.id)}','perdida')">✕ Perdida</button>
-            ${x.resultado==="pendente" ? `<span class="pending-badge">⏳ Pendente</span>` : `<button class="result-btn" onclick="reabrirResultado('${jsQuote(x.id)}')">↩ Pendente</button>`}
-            <button class="delete-history" onclick="removerHistorico('${jsQuote(x.id)}')">×</button>
+            <button class="result-btn ${x.resultado==="ganha"?"selected":""}" onclick="atualizarResultado('${jsQuote(chaveHistorico(x))}','ganha')">✓ Ganha</button>
+            <button class="result-btn ${x.resultado==="perdida"?"selected":""}" onclick="atualizarResultado('${jsQuote(chaveHistorico(x))}','perdida')">✕ Perdida</button>
+            ${x.resultado==="pendente" ? `<span class="pending-badge">⏳ Pendente</span>` : `<button class="result-btn" onclick="reabrirResultado('${jsQuote(chaveHistorico(x))}')">↩ Pendente</button>`}
+            <button class="delete-history" onclick="removerHistorico('${jsQuote(chaveHistorico(x))}')">×</button>
           </div>
         </div>`).join("")}
     </div>`;
@@ -663,6 +669,34 @@ function renderizarCalibracao() {
 
   // V1.4.25 — quadro de auditoria do ajuste adaptativo.
   // Mostra exactamente como o histórico pode alterar o Score, sem usar o laboratório.
+  const providers = [
+    {key:"API-Football", label:"API-Football"},
+    {key:"football-data.org", label:"Football-Data"}
+  ];
+  const sourceStats = providers.map(p => {
+    const all = historicoSugestoes.filter(x => x.provider === p.key);
+    const items = all.filter(x => x.resultado !== "pendente");
+    const wins = items.filter(x => x.resultado === "ganha").length;
+    const avgConf = items.length ? Math.round(items.reduce((s,x)=>s+clamp(x.confidence ?? x.rawConfidence ?? 50),0)/items.length) : null;
+    const avgScore = items.length ? Math.round(items.reduce((s,x)=>s+clamp(x.score ?? 0),0)/items.length) : null;
+    const rate = items.length ? Math.round(wins/items.length*100) : null;
+    return { ...p, total:all.length, evaluated:items.length, pending:all.length-items.length, wins, losses:items.length-wins, rate, avgConf, avgScore, gap:rate==null||avgConf==null?null:rate-avgConf };
+  });
+  const legacyCount = historicoSugestoes.filter(x => !x.provider).length;
+  const legacyResolved = historicoSugestoes.filter(x => !x.provider && x.resultado !== "pendente").length;
+  const knownMarkets = [...new Set(historicoSugestoes.filter(x=>x.provider && x.resultado!=="pendente").map(x=>x.market).filter(Boolean))].sort();
+  function sourceMarketStats(provider, market) {
+    const items=historicoSugestoes.filter(x=>x.provider===provider && x.market===market && x.resultado!=="pendente");
+    const wins=items.filter(x=>x.resultado==="ganha").length;
+    const rate=items.length?Math.round(wins/items.length*100):null;
+    const avgConf=items.length?Math.round(items.reduce((s,x)=>s+clamp(x.confidence ?? x.rawConfidence ?? 50),0)/items.length):null;
+    return {n:items.length,wins,rate,avgConf};
+  }
+  const sourceConfidenceCell = (provider, market) => {
+    const s=sourceMarketStats(provider,market);
+    return s.n ? `<b>${s.rate}% (${s.wins}/${s.n})</b><small>Confiança média ${s.avgConf}%</small>` : `—<small>Sem resultados avaliados</small>`;
+  };
+
   const auditGroups={};
   resolved.forEach(x=>{
     const market=x.market || "—";
@@ -693,8 +727,38 @@ function renderizarCalibracao() {
 
   c.innerHTML=`
     <div class="calibration-panel">
-      <h3>📊 Calibração real do modelo</h3>
-      <p>A confiança é comparada com os resultados reais. A calibração adaptativa só pode alterar o Score após <b>5 resultados reais avaliados</b>. O Laboratório é ignorado.</p>
+      <h3>📊 Desempenho dos prognósticos por fonte</h3>
+      <p>Compara apenas sugestões novas com fonte registada e resultado avaliado. A taxa representa acertos ÷ resultados avaliados; a diferença compara o acerto real com a confiança média prevista. Não garante desempenho futuro, e diferentes fontes podem recomendar jogos diferentes.</p>
+      <div class="source-performance-grid">
+        ${sourceStats.map(s=>`
+          <section class="source-performance-card">
+            <h4>${escapeHtml(s.label)}</h4>
+            <div class="source-metric-grid">
+              <div><small>Prognósticos</small><strong>${s.total}</strong></div>
+              <div><small>Avaliados</small><strong>${s.evaluated}</strong></div>
+              <div><small>Acerto real</small><strong>${s.rate==null?"—":s.rate+"%"}</strong></div>
+              <div><small>Confiança média</small><strong>${s.avgConf==null?"—":s.avgConf+"%"}</strong></div>
+              <div><small>Real − previsto</small><strong>${s.gap==null?"—":(s.gap>0?"+":"")+s.gap+" pp"}</strong></div>
+              <div><small>Pendentes</small><strong>${s.pending}</strong></div>
+            </div>
+            <p class="source-sample-note">${s.evaluated<10?"Amostra muito pequena; ainda sem comparação fiável.":s.evaluated<30?"Amostra inicial; continuar a recolher resultados.":"Amostra em crescimento; comparar também por mercado."}</p>
+          </section>`).join("")}
+      </div>
+      <h4 class="calibration-subtitle">⚖️ Taxa de acerto por mercado e fonte</h4>
+      ${knownMarkets.length ? `
+        <div class="calibration-table source-comparison-table">
+          <div class="ct-head"><span>Mercado</span><span>API-Football</span><span>Football-Data</span></div>
+          ${knownMarkets.map(market=>`<div class="ct-row">
+            <span><b>${escapeHtml(market)}</b></span>
+            <span>${sourceConfidenceCell("API-Football",market)}</span>
+            <span>${sourceConfidenceCell("football-data.org",market)}</span>
+          </div>`).join("")}
+        </div>` : `<div class="history-empty">Ainda não há resultados avaliados atribuídos a uma das duas fontes. Guarda novas sugestões e marca os resultados como ganha ou perdida para começar a comparação.</div>`}
+      ${legacyCount ? `<div class="calibration-help"><b>Histórico anterior:</b> existem ${legacyCount} registos sem fonte identificada (${legacyResolved} já avaliados). Estes continuam guardados e entram nas estatísticas globais abaixo, mas não são atribuídos a nenhuma API nem usados na calibração individual, porque a origem não foi registada nesses registos.</div>` : `<div class="calibration-help">As estatísticas por fonte começam a partir de sugestões que foram guardadas com a identificação da API na V1.4.30 ou posterior.</div>`}
+      <div class="source-combined-note">
+        <h3>📊 Calibração global combinada</h3>
+        <p>Esta secção agrega o histórico completo, incluindo registos antigos sem fonte identificada. Para decidir qual API tem melhor desempenho, consulta primeiro a comparação por fonte acima.</p>
+      </div>
       <div class="history-summary">
         <div><strong>${overall==null?"—":overall+"%"}</strong><small>Acerto real</small></div>
         <div><strong>${avgPred==null?"—":avgPred+"%"}</strong><small>Confiança média prevista</small></div>
@@ -708,12 +772,12 @@ function renderizarCalibracao() {
         <span class="adaptive-badge">${resolved.length<5?"SEM AJUSTE":"AJUSTE CONTROLADO"}</span>
       </div>
 
-      <h4 class="calibration-subtitle">🎯 Auditoria do Score adaptativo</h4>
+      <h4 class="calibration-subtitle">🎯 Auditoria do Score adaptativo (dados combinados)</h4>
       <p class="calibration-explain">O valor <b>Original</b> é o Score guardado na previsão. <b>Calibrado</b> é uma prévia do Score após aplicar a diferença real, com peso progressivo pela dimensão da amostra. Nenhum ajuste é aplicado ao histórico retroactivamente.</p>
       ${auditRows.length ? `<div class="calibration-table adaptive-table"><div class="ct-head"><span>Mercado / faixa</span><span>Amostra</span><span>Real / previsto</span><span>Score</span></div>${auditRows.map(r=>`
         <div class="ct-row"><span><b>${escapeHtml(r.market)}</b><small>${escapeHtml(r.bucket)} · ${r.state}</small></span><span>${r.n}</span><span>${r.rate}% / ${r.avgConf}%<small>${r.adjustment>0?"+":""}${r.adjustment} pts</small></span><span>${r.avgRaw} → <b>${r.preview}</b></span></div>`).join("")}</div>` : `<div class="history-empty">Ainda não há resultados reais avaliados para auditar o ajuste do Score.</div>`}
 
-      ${rows.length ? `<h4 class="calibration-subtitle">📚 Desempenho por mercado</h4><div class="calibration-table"><div class="ct-head"><span>Mercado</span><span>Amostra</span><span>Acerto</span><span>Estado</span></div>${rows.map(([market,items])=>{
+      ${rows.length ? `<h4 class="calibration-subtitle">📚 Desempenho combinado por mercado</h4><div class="calibration-table"><div class="ct-head"><span>Mercado</span><span>Amostra</span><span>Acerto</span><span>Estado</span></div>${rows.map(([market,items])=>{
         const wins=items.filter(x=>x.resultado==="ganha").length, rate=Math.round(wins/items.length*100);
         const avg=Math.round(items.reduce((s,x)=>s+clamp(x.confidence ?? x.rawConfidence ?? 50),0)/items.length);
         const diff=rate-avg;

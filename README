@@ -73,3 +73,14 @@ A calibração usa apenas resultados reais do histórico. Com pelo menos 5 resul
 - A rota antiga, sem o parâmetro `provider`, mantém o comportamento anterior para compatibilidade.
 - O histórico e a calibração existentes são preservados. Novas sugestões guardam a identificação da fonte de origem.
 - Não altera as chaves da Vercel nem o algoritmo de Score/confiança da V1.4.29.
+
+
+## V1.4.31 — desempenho por fonte
+
+- Adiciona à Calibração a comparação entre API-Football e Football-Data, com prognósticos registados, avaliados, pendentes, taxa de acerto, confiança média e diferença real-prevista.
+- Acrescenta uma tabela de desempenho por mercado e fonte.
+- O Histórico identifica a fonte de cada nova sugestão.
+- Ganha/perdida/pendente/remover são aplicados à entrada específica do histórico, distinguindo fonte e ID.
+- A calibração adaptativa de novos prognósticos passa a usar apenas resultados reais da mesma fonte, evitando que uma API influencie a outra.
+- Registos anteriores sem a propriedade `provider` são preservados e continuam visíveis nas estatísticas globais, mas não são atribuídos retroactivamente a uma API nem usados na calibração específica da fonte.
+- Não altera os cálculos-base das previsões recebidas das APIs; os números reais são usados para avaliar a qualidade dos prognósticos guardados.

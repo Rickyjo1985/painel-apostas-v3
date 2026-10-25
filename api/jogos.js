@@ -524,7 +524,7 @@ export default async function handler(req,res){
     if(useFallback){
       if(!hasFootballDataKey) throw new Error("FOOTBALL_DATA_API_KEY não está disponível neste deployment.");
       const result=await loadFootballDataFallback(date,force);
-      return res.status(200).json({ok:true,version:"1.4.30",provider:result.provider,date,dateLabel:labelDate(date),fixturesFound:result.fixturesFound,candidates:result.candidates,analyzed:result.analyzedCount,recommendable:result.recommendable,selected:result.games.length,games:result.games,diagnostics:result.diagnostics,cached:!force});
+      return res.status(200).json({ok:true,version:"1.4.31",provider:result.provider,date,dateLabel:labelDate(date),fixturesFound:result.fixturesFound,candidates:result.candidates,analyzed:result.analyzedCount,recommendable:result.recommendable,selected:result.games.length,games:result.games,diagnostics:result.diagnostics,cached:!force});
     }
     try{
       const result=await cached(`v1415:${date}`,async()=>{
@@ -557,13 +557,13 @@ export default async function handler(req,res){
         const recommendable=out.filter(g=>g.evidenceCount>=3&&g.suggestion.market!=="none"&&g.score>=50),games=recommendable.slice(0,TOP_LIMIT);
         return {provider:"API-Football",fixturesFound:fixtures.length,candidates:candidates.length,analyzedCount:out.length,failures:0,recommendable:recommendable.length,games,all:out,diagnostics};
       },force);
-      return res.status(200).json({ok:true,version:"1.4.30",provider:result.provider,date,dateLabel:labelDate(date),fixturesFound:result.fixturesFound,candidates:result.candidates,analyzed:result.analyzedCount,recommendable:result.recommendable,selected:result.games.length,games:result.games,diagnostics:result.diagnostics,cached:!force});
+      return res.status(200).json({ok:true,version:"1.4.31",provider:result.provider,date,dateLabel:labelDate(date),fixturesFound:result.fixturesFound,candidates:result.candidates,analyzed:result.analyzedCount,recommendable:result.recommendable,selected:result.games.length,games:result.games,diagnostics:result.diagnostics,cached:!force});
     }catch(primaryError){
       if(forcedProvider==="api-football") throw primaryError;
       console.warn("API-Football indisponível; a usar fallback football-data.org:",primaryError?.message||primaryError);
       if(hasFootballDataKey){
         const result=await loadFootballDataFallback(date,force);
-        return res.status(200).json({ok:true,version:"1.4.30",provider:result.provider,fallbackFrom:"API-Football",date,dateLabel:labelDate(date),fixturesFound:result.fixturesFound,candidates:result.candidates,analyzed:result.analyzedCount,recommendable:result.recommendable,selected:result.games.length,games:result.games,diagnostics:{...result.diagnostics,primaryProvider:"API-Football",primaryError:primaryError?.message||"indisponível"},cached:!force});
+        return res.status(200).json({ok:true,version:"1.4.31",provider:result.provider,fallbackFrom:"API-Football",date,dateLabel:labelDate(date),fixturesFound:result.fixturesFound,candidates:result.candidates,analyzed:result.analyzedCount,recommendable:result.recommendable,selected:result.games.length,games:result.games,diagnostics:{...result.diagnostics,primaryProvider:"API-Football",primaryError:primaryError?.message||"indisponível"},cached:!force});
       }
       throw primaryError;
     }
